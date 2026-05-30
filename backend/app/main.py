@@ -1,5 +1,8 @@
+from pathlib import Path
+
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.staticfiles import StaticFiles
 import os
 import shutil
 
@@ -35,9 +38,12 @@ app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
 UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
+frontend_dir = Path(__file__).resolve().parents[2] / "frontend"
+app.mount("/", StaticFiles(directory=str(frontend_dir), html=True), name="frontend")
 
-@app.get("/")
-def home():
+
+@app.get("/health")
+def health():
     return {"message": "Speech Therapy API Running"}
 
 

@@ -58,7 +58,7 @@ poetry.lock
 # Database and uploads
 *.db
 *.sqlite3
-backend/scratch/uploads/
+backend/uploads/
 
 # Local environment variables
 .env
