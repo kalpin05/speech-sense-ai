@@ -2196,15 +2196,28 @@ function togglePass(id, btn) {
   btn.querySelector('i').className = isText ? 'fa-solid fa-eye' : 'fa-solid fa-eye-slash';
 }
 
-function handleLogin() {
+async function handleLogin() {
   const email = document.getElementById('loginEmail').value.trim();
   const pass  = document.getElementById('loginPass').value;
   const t = i18n[currentLang] || i18n.en;
   if (!email || !pass) { showToast('Please fill in all fields.'); return; }
-  showSuccess('Welcome back! 👋', `You're now logged in to SpeechAI.`);
+  
+  try {
+    const res = await fetch('http://127.0.0.1:8000/auth/login', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      body: new URLSearchParams({username: email, password: pass})
+    });
+    if (!res.ok) { showToast('Invalid credentials.'); return; }
+    const data = await res.json();
+    localStorage.setItem('speechai_token', data.access_token);
+    showSuccess('Welcome back! 👋', `You're now logged in to SpeechAI.`);
+  } catch (err) {
+    showToast('Login failed. Backend not running.');
+  }
 }
 
-function handleRegister() {
+async function handleRegister() {
   const first = document.getElementById('regFirst').value.trim();
   const email = document.getElementById('regEmail').value.trim();
   const pass  = document.getElementById('regPass').value;
@@ -2212,7 +2225,22 @@ function handleRegister() {
   if (!first || !email || !pass) { showToast('Please fill in all required fields.'); return; }
   if (pass !== conf) { showToast('Passwords do not match.'); return; }
   if (pass.length < 6) { showToast('Password must be at least 6 characters.'); return; }
-  showSuccess('Account created! 🎉', `Welcome, ${first}! Your 14-day free trial has started.`);
+  
+  try {
+    const res = await fetch('http://127.0.0.1:8000/auth/register', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({email: email, password: pass, first_name: first, last_name: ""})
+    });
+    if (!res.ok) { 
+        const err = await res.json();
+        showToast(err.detail || 'Registration failed.'); 
+        return; 
+    }
+    showSuccess('Account created! 🎉', `Welcome, ${first}! You can now login.`);
+  } catch (err) {
+    showToast('Registration failed. Backend not running.');
+  }
 }
 
 function showSuccess(title, msg) {
@@ -2250,42 +2278,75 @@ function handleContactForm(e) {
 /* ═══════════════════════════════════════════
    SPEECH RECOGNITION
 ═══════════════════════════════════════════ */
-function startRecognition() {
-  const t = i18n[currentLang] || i18n.en;
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+let mediaRecorder;
+let audioChunks = [];
+let isRecording = false;
+
+async function startRecognition() {
   const output = document.getElementById('output');
   output.style.display = 'flex';
-
-  if (!SpeechRecognition) {
-    output.textContent = t.notSupported || 'Speech recognition not supported in this browser.';
+  
+  if (isRecording) {
+    mediaRecorder.stop();
+    isRecording = false;
+    output.innerHTML = '<i>Uploading and Analyzing audio via backend...</i>';
     return;
   }
 
-  const langMap = { en:'en-US', hi:'hi-IN', mr:'mr-IN', ta:'ta-IN', te:'te-IN', de:'de-DE', fr:'fr-FR', es:'es-ES', ja:'ja-JP', ar:'ar-SA' };
-  const recognition = new SpeechRecognition();
-  recognition.lang = langMap[currentLang] || 'en-US';
-  recognition.interimResults = true;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    mediaRecorder = new MediaRecorder(stream);
+    audioChunks = [];
 
-  output.textContent = t.listeningMsg || 'Listening...';
+    mediaRecorder.ondataavailable = e => {
+      audioChunks.push(e.data);
+    };
 
-  recognition.start();
+    mediaRecorder.onstop = async () => {
+      const audioBlob = new Blob(audioChunks, { type: 'audio/mp3' });
+      const formData = new FormData();
+      formData.append('file', audioBlob, 'record.webm');
+      
+      const langNames = { en:'english', hi:'hindi', mr:'marathi', ta:'tamil', te:'telugu', de:'german', fr:'french', es:'spanish', ja:'japanese', ar:'arabic' };
+      const selectedLanguage = langNames[currentLang] || 'english';
+      
+      formData.append('language', selectedLanguage);
+      formData.append('expected_text', window.prompt('Enter the expected text (or leave blank to ignore accuracy context):') || "testing");
 
-  recognition.onresult = (event) => {
-    let transcript = '';
-    for (let i = event.resultIndex; i < event.results.length; i++) {
-      transcript += event.results[i][0].transcript;
-    }
-    output.textContent = transcript;
-  };
+      const token = localStorage.getItem('speechai_token');
+      const headers = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
 
-  recognition.onerror = () => {
-    output.textContent = t.noSpeech || 'No speech detected.';
-    setTimeout(() => output.style.display = 'none', 3000);
-  };
+      try {
+        const res = await fetch('http://127.0.0.1:8000/analyze', {
+          method: 'POST',
+          headers: headers,
+          body: formData
+        });
+        const data = await res.json();
+        if (data.status === 'success') {
+          output.innerHTML = `
+            <b>Transcription:</b> ${data.transcription}<br>
+            <b>Accuracy:</b> ${data.accuracy}% <span style='font-size:0.8rem;color:#8fa5bc'>|</span>
+            <b>Fluency:</b> ${data.fluency} <span style='font-size:0.8rem;color:#8fa5bc'>|</span>
+            <b>AI Feedback:</b> ${data.feedback}
+          `;
+        } else {
+          output.textContent = 'Backend Error: ' + data.message;
+        }
+      } catch (err) {
+        output.textContent = 'Error contacting backend. Is Uvicorn running?';
+      }
 
-  recognition.onend = () => {
-    setTimeout(() => { if(output.textContent === (t.listeningMsg || 'Listening...')) output.style.display = 'none'; }, 2000);
-  };
+      stream.getTracks().forEach(t => t.stop());
+    };
+
+    mediaRecorder.start();
+    isRecording = true;
+    output.innerHTML = '<b>🔴 Recording...</b> <span style="color:#fff">(Click the Start Speaking button again to finish)</span>';
+  } catch (err) {
+    output.textContent = 'Microphone access denied or not available. Cannot connect to backend.';
+  }
 }
 
 /* ═══════════════════════════════════════════

@@ -1,0 +1,95 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+dist/
+build/
+*.egg-info/
+*.egg
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+
+# Pytest
+.pytest_cache/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# Poetry
+poetry.lock
+
+# VS Code
+.vscode/
+
+# IDEs and editors
+*.swp
+*~
+*.tmp
+*.bak
+
+# Database and uploads
+*.db
+*.sqlite3
+backend/scratch/uploads/
+
+# Local environment variables
+.env
+.env.*
+
+# Logs
+*.log
+logs/
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+desktop.ini
+
+# Temporary files
+*.tmp
+*.temp
+
+# Ignore local config files
+*.local
+
+# Ignore secrets
+secret*
+credentials*
+
+# Ignore coverage and reports
+reports/
+
+# Ignore compiled files
+*.class
+*.o
+*.pyc
