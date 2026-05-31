@@ -1,10 +1,12 @@
 from pathlib import Path
 
-from fastapi import FastAPI, UploadFile, File, Form
+from fastapi import FastAPI, UploadFile, File, Form, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.staticfiles import StaticFiles
 import os
 import shutil
+import uuid
+import logging
 
 from app.services.whisper_service import transcribe_audio
 from app.services.analysis_service import (
@@ -15,31 +17,48 @@ from app.services.analysis_service import (
 from app.utils.language_map import LANGUAGE_MAP
 from app.database import engine, Base, get_db
 from sqlalchemy.orm import Session
-from fastapi import Depends
 from app.api.endpoints import auth
 from app.models import user, session_model
 from app.models.session_model import TherapySession
+from app.schemas.user_schema import UserResponse, TherapySessionResponse
+from app.utils.file_handler import is_valid_audio, sanitize_extension
+from app.config import ALLOW_CREATE_ALL
 
-# Initialize database tables
-Base.metadata.create_all(bind=engine)
+# Only initialize DB schema when explicitly allowed (safer for production)
+if ALLOW_CREATE_ALL:
+    Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
+# Configure CORS from environment
+_allow_all = os.getenv("ALLOW_ALL_ORIGINS", "false").lower() in ("1", "true", "yes")
+if _allow_all:
+    cors_origins = ["*"]
+    allow_credentials = False
+else:
+    raw = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8000")
+    cors_origins = [o.strip() for o in raw.split(",") if o.strip()]
+    allow_credentials = os.getenv("ALLOW_CREDENTIALS", "false").lower() in ("1", "true", "yes")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=cors_origins,
+    allow_credentials=allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
 
-UPLOAD_FOLDER = "uploads"
+# Upload folder (kept inside backend/uploads)
+UPLOAD_FOLDER = Path(__file__).resolve().parents[1] / "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 frontend_dir = Path(__file__).resolve().parents[2] / "frontend"
 app.mount("/", StaticFiles(directory=str(frontend_dir), html=True), name="frontend")
+
+log = logging.getLogger("uvicorn.error")
+logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
 
 
 @app.get("/health")
@@ -54,22 +73,46 @@ async def analyze_audio(
     language: str = Form(...),
     db: Session = Depends(get_db)
 ):
+    # Limits and checks
+    MAX_UPLOAD_SIZE = int(os.getenv("MAX_UPLOAD_SIZE", 10 * 1024 * 1024))  # 10MB default
+
+    if language.lower() not in LANGUAGE_MAP:
+        raise HTTPException(status_code=400, detail="Unsupported language")
+
+    language_code = LANGUAGE_MAP[language.lower()]
+
+    ext = sanitize_extension(file.filename)
+    if not ext:
+        raise HTTPException(status_code=400, detail="Invalid or unsupported file format")
+
+    # Build a safe unique filename
+    safe_name = f"{uuid.uuid4().hex}{ext}"
+    file_path = str(UPLOAD_FOLDER / safe_name)
+
+    # Stream upload with size check
     try:
-        if not file.filename.endswith((".wav", ".mp3", ".m4a", ".mp4")):
-            return {"status": "error", "message": "Invalid file format"}
-
-        if language.lower() not in LANGUAGE_MAP:
-            return {"status": "error", "message": "Unsupported language"}
-
-        language_code = LANGUAGE_MAP[language.lower()]
-
-        file_path = os.path.join(UPLOAD_FOLDER, file.filename)
-
+        total = 0
         with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+            while True:
+                chunk = await file.read(1024 * 1024)
+                if not chunk:
+                    break
+                total += len(chunk)
+                if total > MAX_UPLOAD_SIZE:
+                    buffer.close()
+                    try:
+                        os.remove(file_path)
+                    except Exception:
+                        pass
+                    raise HTTPException(status_code=413, detail="Uploaded file is too large")
+                buffer.write(chunk)
 
-        # 🔥 Controlled transcription
-        transcription = transcribe_audio(file_path, language_code)
+        # Controlled transcription
+        try:
+            transcription = transcribe_audio(file_path, language_code)
+        except Exception as e:
+            log.exception("Transcription failed")
+            raise HTTPException(status_code=500, detail="Transcription service failed")
 
         # Analysis
         accuracy = calculate_accuracy(expected_text, transcription)
@@ -86,8 +129,13 @@ async def analyze_audio(
             feedback=feedback,
             audio_file_path=file_path
         )
-        db.add(db_session)
-        db.commit()
+        try:
+            db.add(db_session)
+            db.commit()
+        except Exception:
+            db.rollback()
+            log.exception("Database commit failed for new therapy session")
+            raise HTTPException(status_code=500, detail="Failed to save session")
 
         return {
             "status": "success",
@@ -98,15 +146,40 @@ async def analyze_audio(
             "feedback": feedback
         }
 
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
+    except HTTPException:
+        raise
+    except Exception:
+        log.exception("Unexpected error in /analyze")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.get("/users")
 def get_all_users(db: Session = Depends(get_db)):
     users = db.query(user.User).all()
-    return {"users_in_database": users}
+    safe = []
+    for u in users:
+        safe.append({
+            "id": str(u.id),
+            "email": u.email,
+            "first_name": u.first_name,
+            "last_name": u.last_name,
+            "created_at": u.created_at,
+        })
+    return {"users_in_database": safe}
 
 @app.get("/sessions")
 def get_all_sessions(db: Session = Depends(get_db)):
     sessions = db.query(session_model.TherapySession).all()
-    return {"sessions_in_database": sessions}
+    safe = []
+    for s in sessions:
+        safe.append({
+            "id": str(s.id),
+            "user_id": str(s.user_id) if s.user_id else None,
+            "expected_text": s.expected_text,
+            "transcription": s.transcription,
+            "language": s.language,
+            "accuracy_score": s.accuracy_score,
+            "fluency_score": s.fluency_score,
+            "feedback": s.feedback,
+            "created_at": s.created_at,
+        })
+    return {"sessions_in_database": safe}

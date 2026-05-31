@@ -25,3 +25,18 @@ class Token(BaseModel):
 
 class TokenData(BaseModel):
     email: str | None = None
+
+
+class TherapySessionResponse(BaseModel):
+    id: UUID
+    user_id: Optional[UUID] = None
+    expected_text: str
+    transcription: str
+    language: str
+    accuracy_score: float
+    fluency_score: str
+    feedback: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
