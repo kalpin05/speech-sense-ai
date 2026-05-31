@@ -39,9 +39,33 @@ select,input[type=range]{padding:6px;border-radius:8px;border:none}
 .toast{position:fixed;bottom:-60px;left:50%;transform:translateX(-50%);background:#22c55e;color:black;padding:10px 20px;border-radius:10px;transition:.4s}
 .toast.show{bottom:20px}
 
+/* NAVBAR */
+nav{position:fixed;top:0;left:0;right:0;height:60px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;background:rgba(15,23,42,0.9);backdrop-filter:blur(10px);border-bottom:1px solid rgba(255,255,255,0.1);z-index:1000}
+.nav-brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:white;font-weight:600;font-size:1.1rem}
+.nav-links{display:flex;gap:20px;list-style:none}
+.nav-links a{text-decoration:none;color:#8fa5bc;font-size:0.9rem;transition:color 0.2s}
+.nav-links a:hover,.nav-links a.active{color:#38bdf8}
+.nav-right{display:flex;gap:15px;align-items:center}
+.btn-logout{padding:8px 16px;background:transparent;border:1px solid #38bdf8;color:#38bdf8;border-radius:6px;cursor:pointer;font-size:0.85rem;transition:all 0.2s}
+.btn-logout:hover{background:#38bdf8;color:#0f172a}
+body{margin-top:60px}
+
 </style>
 </head>
 <body>
+
+<nav>
+  <a href="dashboard.html" class="nav-brand">🎯 SpeechAI</a>
+  <div class="nav-links">
+    <a href="dashboard.html">Dashboard</a>
+    <a href="exercises.html">Exercises</a>
+    <a href="achievement-progress.html">Progress</a>
+    <a href="settings.html" class="active">Settings</a>
+  </div>
+  <div class="nav-right">
+    <button class="btn-logout" onclick="logout()">Logout</button>
+  </div>
+</nav>
 
 <div class="container">
 <h1>⚙️ Settings</h1>
@@ -142,6 +166,14 @@ if(confirm('Reset all data?')){
 localStorage.clear();
 location.reload();
 }
+}
+
+function logout() {
+  if(confirm('Are you sure you want to logout?')) {
+    localStorage.removeItem('username');
+    localStorage.removeItem('speechai_token');
+    window.location.href = 'index.html';
+  }
 }
 </script>
 

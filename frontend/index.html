@@ -2211,9 +2211,10 @@ async function handleLogin() {
     if (!res.ok) { showToast('Invalid credentials.'); return; }
     const data = await res.json();
     localStorage.setItem('speechai_token', data.access_token);
+    localStorage.setItem('username', email.split('@')[0]);
     showSuccess('Welcome back! 👋', `You're now logged in to SpeechAI.`);
     setTimeout(() => {
-      window.location.href = 'exercises.html';
+      window.location.href = 'dashboard.html';
     }, 1400);
   } catch (err) {
     showToast('Login failed. Backend not running.');
@@ -2240,7 +2241,11 @@ async function handleRegister() {
         showToast(err.detail || 'Registration failed.'); 
         return; 
     }
-    showSuccess('Account created! 🎉', `Welcome, ${first}! You can now login.`);
+    localStorage.setItem('username', first);
+    showSuccess('Account created! 🎉', `Welcome, ${first}! Redirecting to dashboard...`);
+    setTimeout(() => {
+      window.location.href = 'dashboard.html';
+    }, 1400);
   } catch (err) {
     showToast('Registration failed. Backend not running.');
   }
