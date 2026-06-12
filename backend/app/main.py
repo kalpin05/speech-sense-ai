@@ -1,7 +1,9 @@
 from pathlib import Path
 
-from fastapi import FastAPI, UploadFile, File, Form, Depends, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, Depends, HTTPException, BackgroundTasks, Query
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.concurrency import run_in_threadpool
+import asyncio
 from starlette.staticfiles import StaticFiles
 import os
 import shutil
@@ -22,7 +24,11 @@ from app.models import user, session_model
 from app.models.session_model import TherapySession
 from app.schemas.user_schema import UserResponse, TherapySessionResponse
 from app.utils.file_handler import is_valid_audio, sanitize_extension
+from app.services.auth_service import get_current_user
 from app.config import ALLOW_CREATE_ALL
+
+# Limit to 1 concurrent Whisper transcription to prevent Out-Of-Memory crashes
+whisper_semaphore = asyncio.Semaphore(1)
 
 # Only initialize DB schema when explicitly allowed (safer for production)
 if ALLOW_CREATE_ALL:
@@ -68,10 +74,12 @@ def health():
 
 @app.post("/analyze")
 async def analyze_audio(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     expected_text: str = Form(...),
     language: str = Form(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: user.User = Depends(get_current_user)
 ):
     # Limits and checks
     MAX_UPLOAD_SIZE = int(os.getenv("MAX_UPLOAD_SIZE", 10 * 1024 * 1024))  # 10MB default
@@ -107,9 +115,21 @@ async def analyze_audio(
                     raise HTTPException(status_code=413, detail="Uploaded file is too large")
                 buffer.write(chunk)
 
-        # Controlled transcription
+        # Register background cleanup task so the disk doesn't fill up
+        def cleanup_file(path: str):
+            try:
+                if os.path.exists(path):
+                    os.remove(path)
+            except Exception as e:
+                log.error(f"Failed to cleanup file {path}: {e}")
+                
+        background_tasks.add_task(cleanup_file, file_path)
+
+        # Controlled transcription using threadpool to prevent freezing the event loop
+        # and using Semaphore to prevent Out-Of-Memory crashes
         try:
-            transcription = transcribe_audio(file_path, language_code)
+            async with whisper_semaphore:
+                transcription = await run_in_threadpool(transcribe_audio, file_path, language_code)
         except Exception as e:
             log.exception("Transcription failed")
             raise HTTPException(status_code=500, detail="Transcription service failed")
@@ -121,6 +141,7 @@ async def analyze_audio(
 
         # Save to database
         db_session = TherapySession(
+            user_id=current_user.id,
             expected_text=expected_text,
             transcription=transcription,
             language=language,
@@ -153,8 +174,8 @@ async def analyze_audio(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.get("/users")
-def get_all_users(db: Session = Depends(get_db)):
-    users = db.query(user.User).all()
+def get_all_users(skip: int = Query(0, ge=0), limit: int = Query(100, ge=1, le=1000), db: Session = Depends(get_db)):
+    users = db.query(user.User).offset(skip).limit(limit).all()
     safe = []
     for u in users:
         safe.append({
@@ -167,8 +188,8 @@ def get_all_users(db: Session = Depends(get_db)):
     return {"users_in_database": safe}
 
 @app.get("/sessions")
-def get_all_sessions(db: Session = Depends(get_db)):
-    sessions = db.query(session_model.TherapySession).all()
+def get_all_sessions(skip: int = Query(0, ge=0), limit: int = Query(100, ge=1, le=1000), db: Session = Depends(get_db)):
+    sessions = db.query(session_model.TherapySession).offset(skip).limit(limit).all()
     safe = []
     for s in sessions:
         safe.append({
