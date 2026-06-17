@@ -114,67 +114,161 @@ body{margin-top:60px}
 <div id="toast" class="toast">Saved!</div>
 
 <script>
-// Save & load
-let inputs=document.querySelectorAll('input,select');
-inputs.forEach(el=>{
-let id=el.id;
-if(localStorage.getItem(id)!=null){
-if(el.type==='checkbox') el.checked=JSON.parse(localStorage.getItem(id));
-else el.value=localStorage.getItem(id);
+// Initialization
+let token = localStorage.getItem('speechai_token');
+if (!token) {
+  window.location.href = 'index.html';
 }
 
-el.onchange=()=>{
-if(el.type==='checkbox') localStorage.setItem(id,el.checked);
-else localStorage.setItem(id,el.value);
-showToast();
+let settingsState = {
+  daily_goal: 5,
+  reminders: false,
+  sound: true,
+  mic_sensitivity: 5,
+  xp_boost: false,
+  streak_freeze: false,
+  light_mode: false,
+  save_data: true
+};
+
+async function loadSettings() {
+  try {
+    const res = await fetch('http://127.0.0.1:8000/users/me/settings', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (res.ok) {
+      settingsState = await res.json();
+      applySettingsToUI();
+    }
+  } catch (err) {
+    console.error('Failed to load settings', err);
+  }
 }
+
+async function loadProfile() {
+  try {
+    const res = await fetch('http://127.0.0.1:8000/auth/me', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (res.ok) {
+      const user = await res.json();
+      document.getElementById('username').innerText = user.first_name || 'User';
+    }
+  } catch (err) {
+    console.error('Failed to load profile', err);
+  }
+}
+
+function applySettingsToUI() {
+  document.getElementById('goal').value = settingsState.daily_goal;
+  document.getElementById('rem').checked = settingsState.reminders;
+  document.getElementById('sound').checked = settingsState.sound;
+  document.getElementById('mic').value = settingsState.mic_sensitivity;
+  document.getElementById('xp').checked = settingsState.xp_boost;
+  document.getElementById('freeze').checked = settingsState.streak_freeze;
+  document.getElementById('theme').checked = settingsState.light_mode;
+  document.getElementById('save').checked = settingsState.save_data;
+
+  if (settingsState.light_mode) {
+    document.body.classList.add('light');
+  } else {
+    document.body.classList.remove('light');
+  }
+}
+
+async function saveSettings() {
+  settingsState = {
+    daily_goal: parseInt(document.getElementById('goal').value),
+    reminders: document.getElementById('rem').checked,
+    sound: document.getElementById('sound').checked,
+    mic_sensitivity: parseInt(document.getElementById('mic').value),
+    xp_boost: document.getElementById('xp').checked,
+    streak_freeze: document.getElementById('freeze').checked,
+    light_mode: document.getElementById('theme').checked,
+    save_data: document.getElementById('save').checked
+  };
+
+  try {
+    await fetch('http://127.0.0.1:8000/users/me/settings', {
+      method: 'PUT',
+      headers: { 
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(settingsState)
+    });
+    showToast();
+    
+    if (settingsState.light_mode) document.body.classList.add('light');
+    else document.body.classList.remove('light');
+
+  } catch (err) {
+    console.error('Failed to save settings', err);
+  }
+}
+
+// Bind events
+let inputs = document.querySelectorAll('input,select');
+inputs.forEach(el => {
+  el.onchange = saveSettings;
 });
 
-// Theme
-let theme=document.getElementById('theme');
-if(localStorage.getItem('theme')==='true') document.body.classList.add('light');
-
-theme.onchange=()=>{
-document.body.classList.toggle('light');
-localStorage.setItem('theme',theme.checked);
-showToast();
-}
-
 // Toast
-function showToast(){
-let t=document.getElementById('toast');
-t.classList.add('show');
-setTimeout(()=>t.classList.remove('show'),1500);
+function showToast() {
+  let t = document.getElementById('toast');
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 1500);
 }
 
 // Name
-function changeName(){
-let n=prompt('Enter name');
-if(n){
-document.getElementById('username').innerText=n;
-localStorage.setItem('username',n);
-showToast();
+async function changeName() {
+  let n = prompt('Enter name');
+  if (n) {
+    document.getElementById('username').innerText = n;
+    localStorage.setItem('username', n);
+    showToast();
+    try {
+      await fetch('http://127.0.0.1:8000/users/me/profile', {
+        method: 'PUT',
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({first_name: n})
+      });
+    } catch (err) {
+      console.error('Failed to save profile name', err);
+    }
+  }
 }
-}
-
-let saved=localStorage.getItem('username');
-if(saved) document.getElementById('username').innerText=saved;
 
 // Reset
-function resetData(){
-if(confirm('Reset all data?')){
-localStorage.clear();
-location.reload();
-}
+async function resetData() {
+  if (confirm('Reset all data? This will permanently delete your session history!')) {
+    try {
+      await fetch('http://127.0.0.1:8000/users/me/data', {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      alert('Data reset successfully.');
+      location.reload();
+    } catch (err) {
+      alert('Failed to reset data.');
+    }
+  }
 }
 
 function logout() {
-  if(confirm('Are you sure you want to logout?')) {
+  if (confirm('Are you sure you want to logout?')) {
     localStorage.removeItem('username');
     localStorage.removeItem('speechai_token');
     window.location.href = 'index.html';
   }
 }
+
+// Init
+loadProfile();
+loadSettings();
 </script>
 
 </body>

@@ -93,10 +93,11 @@ body{margin-top:60px}
 </div>
 
 <div class="recorder">
-<h2 id="targetText">Select Exercise</h2>
-<button class="mic-btn" onclick="startRecording()">🎙</button>
+<h2 id="targetText">Select an exercise from above</h2>
+<button class="mic-btn" id="micBtn" onclick="toggleRecording()">🎙</button>
 <div class="score" id="score">Score: --</div>
 <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+<div id="diffOutput" style="margin-top:20px; padding:15px; background:rgba(255,255,255,0.05); border-radius:12px; display:none; text-align:left; font-size:16px;"></div>
 </div>
 
 <div class="progress-section">
@@ -125,55 +126,148 @@ let streak=JSON.parse(localStorage.getItem('streak'))||0;
 let timeLeft=10;
 let timerInterval;
 
+let mediaRecorder;
+let audioChunks = [];
+let isRecording = false;
+
+async function checkAuth() {
+    const token = localStorage.getItem('speechai_token');
+    if (!token) { window.location.href = 'index.html'; return null; }
+    try {
+        const res = await fetch('http://127.0.0.1:8000/auth/me', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!res.ok) { window.location.href = 'index.html'; return null; }
+        return token;
+    } catch(e) {
+        return null;
+    }
+}
+
+async function loadExercises() {
+    try {
+        const res = await fetch('http://127.0.0.1:8000/exercises?language=english');
+        if (res.ok) {
+            const data = await res.json();
+            const grid = document.querySelector('.exercise-grid');
+            grid.innerHTML = '';
+            data.exercises.forEach((ex, idx) => {
+                const labels = ["Basic", "Fluency", "Advanced", "Challenge"];
+                const lbl = labels[idx % labels.length];
+                grid.innerHTML += `<div class="card"><h3>${lbl}</h3><p style="font-size:0.8rem; color:#8fa5bc; height:40px; overflow:hidden;">${ex}</p><button class="btn" onclick="startExercise('${ex.replace(/'/g, "\\'")}')">Start</button></div>`;
+            });
+        }
+    } catch(e) {}
+}
+
 function updateUI(){
-document.getElementById('goal').innerText=daily+'/5';
-document.getElementById('streak').innerText=streak;
-document.getElementById('avg').innerText=avg()+'%';
+    document.getElementById('goal').innerText=daily+'/5';
+    document.getElementById('streak').innerText=streak;
+    document.getElementById('avg').innerText=avg()+'%';
 }
 
 function startExercise(text){
-target=text.toLowerCase();
-document.getElementById('targetText').innerText=text;
+    target=text;
+    document.getElementById('targetText').innerText=text;
+    document.getElementById('diffOutput').style.display='none';
+    document.getElementById('score').innerText='Score: --';
 }
 
 function startGameMode(){
-startExercise(randomSentence());
-timeLeft=10;
-document.getElementById('timer').innerText='Time: '+timeLeft;
-clearInterval(timerInterval);
-timerInterval=setInterval(()=>{
-timeLeft--;
-document.getElementById('timer').innerText='Time: '+timeLeft;
-if(timeLeft<=0){clearInterval(timerInterval);alert('⏰ Time Up!');}
-},1000);
+    startExercise('The quick brown fox jumps over the lazy dog.');
+    timeLeft=10;
+    document.getElementById('timer').innerText='Time: '+timeLeft;
+    clearInterval(timerInterval);
+    timerInterval=setInterval(()=>{
+        timeLeft--;
+        document.getElementById('timer').innerText='Time: '+timeLeft;
+        if(timeLeft<=0){clearInterval(timerInterval);alert('⏰ Time Up!');}
+    },1000);
 }
 
-function randomSentence(){
-const list=[
-'practice makes perfect',
-'speech ai is amazing',
-'improving communication skills',
-'confidence comes with practice'
-];
-return list[Math.floor(Math.random()*list.length)];
-}
+async function toggleRecording() {
+    const token = localStorage.getItem('speechai_token');
+    if (!token) return;
 
-function startRecording(){
-const rec=new(window.SpeechRecognition||window.webkitSpeechRecognition)();
-rec.lang='en-US';rec.start();
-rec.onresult=e=>{
-let spoken=e.results[0][0].transcript.toLowerCase();
-let s=calc(target,spoken);
-scores.push(s);attempts++;daily++;
-localStorage.setItem('scores',JSON.stringify(scores));
-localStorage.setItem('daily',JSON.stringify(daily));
+    if (!target) {
+        alert("Please select an exercise first!");
+        return;
+    }
 
-document.getElementById('score').innerText='Score: '+s+'%';
-document.getElementById('progressFill').style.width=s+'%';
-updateCharts();updateUI();checkBadges(s);
+    const micBtn = document.getElementById('micBtn');
 
-if(timeLeft>0) document.getElementById('b4').classList.add('active');
-}
+    if (isRecording) {
+        mediaRecorder.stop();
+        isRecording = false;
+        micBtn.style.background = 'gray';
+        document.getElementById('targetText').innerHTML = '<i>Analyzing with backend...</i>';
+        return;
+    }
+
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+        audioChunks = [];
+
+        mediaRecorder.ondataavailable = e => { audioChunks.push(e.data); };
+        mediaRecorder.onstop = async () => {
+            const audioBlob = new Blob(audioChunks, { type: 'audio/mp3' });
+            const formData = new FormData();
+            formData.append('file', audioBlob, 'record.webm');
+            formData.append('language', 'english');
+            formData.append('expected_text', target);
+
+            try {
+                const res = await fetch('http://127.0.0.1:8000/analyze', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` },
+                    body: formData
+                });
+                const data = await res.json();
+                if (data.status === 'success') {
+                    document.getElementById('targetText').innerText = target;
+                    
+                    let feedbackData = { message: data.feedback, diff: [] };
+                    try { feedbackData = JSON.parse(data.feedback); } catch(e) {}
+
+                    // Update Score & Local Stats
+                    let s = data.accuracy;
+                    scores.push(s); attempts++; daily++;
+                    localStorage.setItem('scores',JSON.stringify(scores));
+                    localStorage.setItem('daily',JSON.stringify(daily));
+                    document.getElementById('score').innerText='Score: '+s+'% | Fluency: '+data.fluency;
+                    document.getElementById('progressFill').style.width=s+'%';
+                    updateCharts(); updateUI(); checkBadges(s);
+
+                    // Diff Output
+                    if (feedbackData.diff && feedbackData.diff.length > 0) {
+                        const diffContainer = document.getElementById('diffOutput');
+                        diffContainer.style.display = 'block';
+                        diffContainer.innerHTML = `<div style="margin-bottom:10px;"><b>AI Feedback:</b> ${feedbackData.message}</div><b>Word Analysis:</b><br>`;
+                        feedbackData.diff.forEach(item => {
+                            let color = 'white';
+                            if (item.status === 'correct') color = '#38bdf8'; // Teal/Blue
+                            else if (item.status === 'missed') color = '#ef4444'; // Red
+                            else if (item.status === 'extra') color = '#facc15'; // Yellow
+                            diffContainer.innerHTML += `<span style="color:${color}; margin-right:4px;">${item.word}</span>`;
+                        });
+                    }
+                } else {
+                    document.getElementById('targetText').innerText = 'Error: ' + (data.detail || data.message);
+                }
+            } catch (err) {
+                document.getElementById('targetText').innerText = 'Backend Error';
+            }
+            stream.getTracks().forEach(t => t.stop());
+        };
+
+        mediaRecorder.start();
+        isRecording = true;
+        micBtn.style.background = 'red';
+        document.getElementById('targetText').innerHTML = '<b>🔴 Recording... (Click mic to stop)</b>';
+    } catch (err) {
+        alert("Microphone access denied.");
+    }
 }
 
 function calc(t,s){let m=0;for(let i=0;i<t.length;i++){if(t[i]===s[i])m++}return Math.floor((m/t.length)*100)}
@@ -208,7 +302,13 @@ function logout() {
   }
 }
 
-updateUI();
+window.addEventListener('DOMContentLoaded', async () => {
+    const token = await checkAuth();
+    if (token) {
+        updateUI();
+        loadExercises();
+    }
+});
 </script>
 
 </body>

@@ -17,7 +17,7 @@ MAX_LOGIN_ATTEMPTS = int(__import__('os').getenv('MAX_LOGIN_ATTEMPTS', 5))
 from app.database import get_db
 from app.models.user import User
 from app.schemas.user_schema import UserCreate, UserResponse, Token
-from app.services.auth_service import get_password_hash, verify_password, create_access_token
+from app.services.auth_service import get_password_hash, verify_password, create_access_token, get_current_user
 from app.config import ACCESS_TOKEN_EXPIRE_MINUTES
 
 router = APIRouter()
@@ -102,3 +102,9 @@ def login_json(payload: LoginRequest, db: Session = Depends(get_db)):
     access_token = create_access_token(data={"sub": user.email}, expires_delta=access_token_expires)
     FAILED_LOGIN_ATTEMPTS.pop(key, None)
     return {"access_token": access_token, "token_type": "bearer"}
+
+
+@router.get("/me", response_model=UserResponse)
+def get_me(current_user: User = Depends(get_current_user)):
+    """Fetch the currently logged in user's profile."""
+    return current_user

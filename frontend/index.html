@@ -1151,12 +1151,20 @@ footer {
       </div>
     </div>
 
-    <button class="btn-login" onclick="openModal('login')" data-i18n="login">
+    <button class="btn-login" id="navLoginBtn" onclick="openModal('login')" data-i18n="login">
       <i class="fa-solid fa-right-to-bracket"></i> Login
     </button>
-    <button class="btn-signup" onclick="openModal('register')" data-i18n="getStarted">
+    <button class="btn-signup" id="navSignupBtn" onclick="openModal('register')" data-i18n="getStarted">
       Get Started
     </button>
+
+    <!-- User Profile (Hidden by default) -->
+    <div id="navUserProfile" style="display: none; align-items: center; gap: 15px;">
+      <span id="navUserName" style="font-weight: 600; color: var(--cyan);"></span>
+      <button class="btn-login" onclick="logout()" style="border-color: var(--rose); color: var(--rose);">
+        <i class="fa-solid fa-arrow-right-from-bracket"></i> Logout
+      </button>
+    </div>
   </div>
 </nav>
 
@@ -1175,7 +1183,7 @@ footer {
       <h1 data-i18n="heroTitle">Transform Your<br>Speech with <span class="grad">AI</span></h1>
       <p class="hero-desc" data-i18n="heroDesc">Smart therapy platform with adaptive exercises, real-time AI feedback, and professional progress tracking — built for every voice.</p>
       <div class="hero-actions">
-        <button class="btn-primary" onclick="startRecognition()">
+        <button class="btn-primary" onclick="openModal('register')">
           <i class="fa-solid fa-microphone"></i> <span data-i18n="startSpeaking">Start Speaking</span>
         </button>
         <a href="#about" class="btn-outline">
@@ -2203,7 +2211,7 @@ async function handleLogin() {
   if (!email || !pass) { showToast('Please fill in all fields.'); return; }
   
   try {
-    const res = await fetch('/auth/login', {
+    const res = await fetch('http://127.0.0.1:8000/auth/login', {
       method: 'POST',
       headers: {'Content-Type': 'application/x-www-form-urlencoded'},
       body: new URLSearchParams({username: email, password: pass})
@@ -2231,7 +2239,7 @@ async function handleRegister() {
   if (pass.length < 6) { showToast('Password must be at least 6 characters.'); return; }
   
   try {
-    const res = await fetch('/auth/register', {
+    const res = await fetch('http://127.0.0.1:8000/auth/register', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({email: email, password: pass, first_name: first, last_name: ""})
@@ -2286,77 +2294,6 @@ function handleContactForm(e) {
 /* ═══════════════════════════════════════════
    SPEECH RECOGNITION
 ═══════════════════════════════════════════ */
-let mediaRecorder;
-let audioChunks = [];
-let isRecording = false;
-
-async function startRecognition() {
-  const output = document.getElementById('output');
-  output.style.display = 'flex';
-  
-  if (isRecording) {
-    mediaRecorder.stop();
-    isRecording = false;
-    output.innerHTML = '<i>Uploading and Analyzing audio via backend...</i>';
-    return;
-  }
-
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    mediaRecorder = new MediaRecorder(stream);
-    audioChunks = [];
-
-    mediaRecorder.ondataavailable = e => {
-      audioChunks.push(e.data);
-    };
-
-    mediaRecorder.onstop = async () => {
-      const audioBlob = new Blob(audioChunks, { type: 'audio/mp3' });
-      const formData = new FormData();
-      formData.append('file', audioBlob, 'record.webm');
-      
-      const langNames = { en:'english', hi:'hindi', mr:'marathi', ta:'tamil', te:'telugu', de:'german', fr:'french', es:'spanish', ja:'japanese', ar:'arabic' };
-      const selectedLanguage = langNames[currentLang] || 'english';
-      
-      formData.append('language', selectedLanguage);
-      formData.append('expected_text', window.prompt('Enter the expected text (or leave blank to ignore accuracy context):') || "testing");
-
-      const token = localStorage.getItem('speechai_token');
-      const headers = {};
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-
-      try {
-        const res = await fetch('/analyze', {
-          method: 'POST',
-          headers: headers,
-          body: formData
-        });
-        const data = await res.json();
-        if (data.status === 'success') {
-          output.innerHTML = `
-            <b>Transcription:</b> ${data.transcription}<br>
-            <b>Accuracy:</b> ${data.accuracy}% <span style='font-size:0.8rem;color:#8fa5bc'>|</span>
-            <b>Fluency:</b> ${data.fluency} <span style='font-size:0.8rem;color:#8fa5bc'>|</span>
-            <b>AI Feedback:</b> ${data.feedback}
-          `;
-        } else {
-          output.textContent = 'Backend Error: ' + data.message;
-        }
-      } catch (err) {
-        output.textContent = 'Error contacting backend. Is Uvicorn running?';
-      }
-
-      stream.getTracks().forEach(t => t.stop());
-    };
-
-    mediaRecorder.start();
-    isRecording = true;
-    output.innerHTML = '<b>🔴 Recording...</b> <span style="color:#fff">(Click the Start Speaking button again to finish)</span>';
-  } catch (err) {
-    output.textContent = 'Microphone access denied or not available. Cannot connect to backend.';
-  }
-}
-
 /* ═══════════════════════════════════════════
    SCROLL ANIMATIONS
 ═══════════════════════════════════════════ */

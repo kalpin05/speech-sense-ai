@@ -44,14 +44,32 @@ def calculate_fluency(transcription: str, language_code: str = "en") -> str:
         return "good"
 
 
+import difflib
+
 def generate_feedback(expected: str, actual: str, accuracy: float, language_code: str = "en") -> str:
     translations = FEEDBACK_TRANSLATIONS.get(language_code, FEEDBACK_TRANSLATIONS["en"])
     
-    if accuracy > 90:
-        return translations["excellent"]
-    elif accuracy > 75:
-        return translations["good"]
-    elif accuracy > 50:
-        return translations["close"].format(expected=expected)
-    else:
-        return translations["poor"].format(expected=expected)
+    # Generate word-level diff
+    expected_words = normalize_text(expected).split()
+    actual_words = normalize_text(actual).split()
+    
+    diff = []
+    matcher = difflib.SequenceMatcher(None, expected_words, actual_words)
+    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+        if tag == 'equal':
+            for w in expected_words[i1:i2]:
+                diff.append({"word": w, "status": "correct"})
+        elif tag == 'replace' or tag == 'delete':
+            for w in expected_words[i1:i2]:
+                diff.append({"word": w, "status": "missed"})
+        elif tag == 'insert':
+            for w in actual_words[j1:j2]:
+                diff.append({"word": w, "status": "extra"})
+
+    # Instead of just returning a string, we return a JSON stringified dict or rely on main.py to pass dicts.
+    # To avoid breaking existing database schemas (which expect a string), we'll format the string with HTML/JSON
+    import json
+    return json.dumps({
+        "message": translations["excellent"] if accuracy > 90 else translations["good"] if accuracy > 75 else translations["close"].format(expected=expected) if accuracy > 50 else translations["poor"].format(expected=expected),
+        "diff": diff
+    })

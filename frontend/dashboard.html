@@ -723,36 +723,71 @@ main {
 <script>
 
 // Initialize dashboard data
-function initializeDashboard() {
-  const username = localStorage.getItem('username') || 'Learner';
-  document.getElementById('username').textContent = username;
-  document.getElementById('profileName').textContent = username;
-  
+async function initializeDashboard() {
+  const token = localStorage.getItem('speechai_token');
+  if (!token) {
+      window.location.href = 'index.html';
+      return;
+  }
+
   // Update current date
   const now = new Date();
   const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
   document.getElementById('currentDate').textContent = now.toLocaleDateString('en-US', options);
-  
-  // Load stats from localStorage
-  const scores = JSON.parse(localStorage.getItem('scores')) || [];
-  const streak = JSON.parse(localStorage.getItem('streak')) || 0;
-  
-  // Calculate stats
-  const avgScore = scores.length > 0 ? Math.floor(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
-  const todayProgress = scores.length > 0 ? scores[scores.length - 1] : 0;
-  const achievements = calculateAchievements(scores, streak);
-  
-  // Update UI
-  document.getElementById('todayProgress').textContent = todayProgress + '%';
-  document.getElementById('currentStreak').textContent = streak;
-  document.getElementById('avgScore').textContent = avgScore + '%';
-  document.getElementById('achievements').textContent = achievements;
-  
-  // Update progress color
-  if (todayProgress >= 80) {
-    document.querySelector('.stat-change.positive').textContent = '↑ Excellent!';
-  } else if (todayProgress >= 60) {
-    document.querySelector('.stat-change.positive').textContent = '↑ Good progress!';
+
+  try {
+      // 1. Fetch User Profile
+      const authRes = await fetch('http://127.0.0.1:8000/auth/me', {
+          headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!authRes.ok) {
+          localStorage.removeItem('speechai_token');
+          window.location.href = 'index.html';
+          return;
+      }
+      const user = await authRes.json();
+      const name = user.first_name || user.email.split('@')[0];
+      document.getElementById('username').textContent = name;
+      document.getElementById('profileName').textContent = name;
+
+      // 2. Fetch Sessions
+      const sessionsRes = await fetch('http://127.0.0.1:8000/users/me/sessions', {
+          headers: { 'Authorization': `Bearer ${token}` }
+      });
+      let scores = [];
+      let streak = 0;
+      if (sessionsRes.ok) {
+          const sessionData = await sessionsRes.json();
+          const my_sessions = sessionData.my_sessions || [];
+          
+          // Reverse so oldest is first for streak/progress logic
+          const chronological = [...my_sessions].reverse();
+          scores = chronological.map(s => s.accuracy_score);
+
+          // Calculate a simple mock streak based on session count for now
+          streak = my_sessions.length > 0 ? 1 : 0;
+      }
+
+      // Calculate stats
+      const avgScore = scores.length > 0 ? Math.floor(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
+      const todayProgress = scores.length > 0 ? scores[scores.length - 1] : 0;
+      const achievements = calculateAchievements(scores, streak);
+      
+      // Update UI
+      document.getElementById('todayProgress').textContent = todayProgress + '%';
+      document.getElementById('currentStreak').textContent = streak;
+      document.getElementById('avgScore').textContent = avgScore + '%';
+      document.getElementById('achievements').textContent = achievements;
+      
+      // Update progress color
+      const posElement = document.querySelector('.stat-change.positive');
+      if (posElement) {
+          if (todayProgress >= 80) posElement.textContent = '↑ Excellent!';
+          else if (todayProgress >= 60) posElement.textContent = '↑ Good progress!';
+          else posElement.textContent = 'Keep practicing!';
+      }
+  } catch (err) {
+      console.error("Dashboard init error:", err);
   }
 }
 
@@ -769,6 +804,7 @@ function calculateAchievements(scores, streak) {
 function logout() {
   if (confirm('Are you sure you want to logout?')) {
     localStorage.removeItem('username');
+    localStorage.removeItem('speechai_token');
     document.location = 'index.html';
   }
 }

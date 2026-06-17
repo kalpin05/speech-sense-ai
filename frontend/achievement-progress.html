@@ -112,58 +112,91 @@ body{margin-top:60px}
 </div>
 
 <script>
-let scores=JSON.parse(localStorage.getItem('scores'))||[];
-let streak=JSON.parse(localStorage.getItem('streak'))||0;
+let token = localStorage.getItem('speechai_token');
+if (!token) {
+  window.location.href = 'index.html';
+}
 
-function avg(){if(scores.length==0)return 0;return Math.floor(scores.reduce((a,b)=>a+b,0)/scores.length)}
-function best(){if(scores.length==0)return 0;return Math.max(...scores)}
+let scores = [];
+let streak = 0;
+
+async function fetchSessions() {
+  try {
+    const res = await fetch('http://127.0.0.1:8000/users/me/sessions', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const my_sessions = data.my_sessions;
+      
+      const chronological = [...my_sessions].reverse();
+      scores = chronological.map(s => s.accuracy_score);
+      streak = my_sessions.length > 0 ? 1 : 0; // Simple streak mockup for now
+
+      updateUI();
+    }
+  } catch (err) {
+    console.error('Failed to load sessions', err);
+  }
+}
+
+function avg() { if(scores.length==0) return 0; return Math.floor(scores.reduce((a,b)=>a+b,0)/scores.length); }
+function best() { if(scores.length==0) return 0; return Math.max(...scores); }
+
+let progressChart, performanceChart;
 
 function updateUI(){
-document.getElementById('attempts').innerText=scores.length;
-document.getElementById('avg').innerText=avg()+'%';
-document.getElementById('best').innerText=best()+'%';
-document.getElementById('streak').innerText=streak+' 🔥';
+  document.getElementById('attempts').innerText = scores.length;
+  document.getElementById('avg').innerText = avg() + '%';
+  document.getElementById('best').innerText = best() + '%';
+  document.getElementById('streak').innerText = streak + ' 🔥';
 
-let level=Math.floor(scores.length/5)+1;
-let progress=(scores.length%5)*20;
-document.getElementById('levelText').innerText='Level '+level;
-document.getElementById('levelFill').style.width=progress+'%';
+  let level = Math.floor(scores.length/5)+1;
+  let progress = (scores.length%5)*20;
+  document.getElementById('levelText').innerText = 'Level ' + level;
+  document.getElementById('levelFill').style.width = progress + '%';
 
-checkBadges();
-loadTimeline();
+  checkBadges();
+  loadTimeline();
+  drawCharts();
 }
 
-let progressChart=new Chart(document.getElementById('progressChart'),{
-type:'line',
-data:{labels:scores.map((_,i)=>'Try '+(i+1)),datasets:[{data:scores,label:'Score Progress'}]},
-options:{plugins:{legend:{labels:{color:'white'}}},scales:{x:{ticks:{color:'white'}},y:{ticks:{color:'white'}}}}
-});
+function drawCharts() {
+  if (progressChart) progressChart.destroy();
+  if (performanceChart) performanceChart.destroy();
 
-let performanceChart=new Chart(document.getElementById('performanceChart'),{
-type:'doughnut',
-data:{labels:['Avg','Remaining'],datasets:[{data:[avg(),100-avg()]}]},
-options:{plugins:{legend:{labels:{color:'white'}}}}
-});
+  progressChart = new Chart(document.getElementById('progressChart'), {
+    type:'line',
+    data:{labels:scores.map((_,i)=>'Try '+(i+1)),datasets:[{data:scores,label:'Score Progress', borderColor: '#38bdf8'}]},
+    options:{plugins:{legend:{labels:{color:'white'}}},scales:{x:{ticks:{color:'white'}},y:{ticks:{color:'white'}}}}
+  });
+
+  performanceChart = new Chart(document.getElementById('performanceChart'), {
+    type:'doughnut',
+    data:{labels:['Avg','Remaining'],datasets:[{data:[avg(),100-avg()], backgroundColor: ['#22c55e', '#1e293b']}]},
+    options:{plugins:{legend:{labels:{color:'white'}}}}
+  });
+}
 
 function checkBadges(){
-if(scores.length>=1)activate('b1');
-if(scores.some(s=>s>=80))activate('b2');
-if(scores.some(s=>s>=90))activate('b3');
-if(streak>=5)activate('b4');
-if(scores.length>=10)activate('b5');
-if(avg()>=85)activate('b6');
+  if(scores.length>=1) activate('b1');
+  if(scores.some(s=>s>=80)) activate('b2');
+  if(scores.some(s=>s>=90)) activate('b3');
+  if(streak>=5) activate('b4');
+  if(scores.length>=10) activate('b5');
+  if(avg()>=85) activate('b6');
 }
-function activate(id){document.getElementById(id).classList.add('active')}
+function activate(id){ document.getElementById(id).classList.add('active'); }
 
 function loadTimeline(){
-let container=document.getElementById('timelineData');
-container.innerHTML='';
-scores.slice(-5).reverse().forEach((s,i)=>{
-let div=document.createElement('div');
-div.className='timeline-item';
-div.innerText='Attempt '+(scores.length-i)+' → Score: '+s+'%';
-container.appendChild(div);
-});
+  let container = document.getElementById('timelineData');
+  container.innerHTML = '';
+  scores.slice(-5).reverse().forEach((s,i)=>{
+    let div = document.createElement('div');
+    div.className = 'timeline-item';
+    div.innerText = 'Attempt '+(scores.length-i)+' → Score: '+s+'%';
+    container.appendChild(div);
+  });
 }
 
 function logout() {
@@ -174,7 +207,7 @@ function logout() {
   }
 }
 
-updateUI();
+fetchSessions();
 </script>
 
 </body>

@@ -19,7 +19,7 @@ from app.services.analysis_service import (
 from app.utils.language_map import LANGUAGE_MAP
 from app.database import engine, Base, get_db
 from sqlalchemy.orm import Session
-from app.api.endpoints import auth
+from app.api.endpoints import auth, users
 from app.models import user, session_model
 from app.models.session_model import TherapySession
 from app.schemas.user_schema import UserResponse, TherapySessionResponse
@@ -54,14 +54,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Routers
 app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
+app.include_router(users.router, prefix="/users", tags=["Users"])
 
 # Upload folder (kept inside backend/uploads)
 UPLOAD_FOLDER = Path(__file__).resolve().parents[1] / "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 frontend_dir = Path(__file__).resolve().parents[2] / "frontend"
-app.mount("/", StaticFiles(directory=str(frontend_dir), html=True), name="frontend")
 
 log = logging.getLogger("uvicorn.error")
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
@@ -204,3 +205,50 @@ def get_all_sessions(skip: int = Query(0, ge=0), limit: int = Query(100, ge=1, l
             "created_at": s.created_at,
         })
     return {"sessions_in_database": safe}
+
+
+@app.get("/users/me/sessions")
+def get_my_sessions(db: Session = Depends(get_db), current_user: user.User = Depends(get_current_user)):
+    """Fetch the past therapy sessions for the logged in user."""
+    sessions = db.query(session_model.TherapySession).filter(session_model.TherapySession.user_id == current_user.id).order_by(session_model.TherapySession.created_at.desc()).all()
+    safe = []
+    for s in sessions:
+        safe.append({
+            "id": str(s.id),
+            "expected_text": s.expected_text,
+            "transcription": s.transcription,
+            "language": s.language,
+            "accuracy_score": s.accuracy_score,
+            "fluency_score": s.fluency_score,
+            "feedback": s.feedback,
+            "created_at": s.created_at,
+        })
+    return {"my_sessions": safe}
+
+
+@app.get("/exercises")
+def get_exercises(language: str = "english"):
+    """Return some predefined exercises for the user to read based on language."""
+    # Hardcoded exercises for MVP. In production, move these to a Database table.
+    exercises_db = {
+        "english": [
+            "The quick brown fox jumps over the lazy dog.",
+            "I would like to order a cup of coffee and a croissant.",
+            "Technology is evolving at an unprecedented pace."
+        ],
+        "hindi": [
+            "मेरा नाम राहुल है और मैं दिल्ली में रहता हूँ।",
+            "मुझे भारतीय भोजन बहुत पसंद है।",
+            "कल बारिश होने की संभावना है।"
+        ],
+        "spanish": [
+            "Hola, ¿cómo estás hoy?",
+            "Me gustaría una cerveza, por favor.",
+            "El clima es muy agradable en verano."
+        ]
+    }
+    lang = language.lower()
+    return {"exercises": exercises_db.get(lang, exercises_db["english"])}
+
+# Mount frontend static files LAST so it doesn't intercept API routes
+app.mount("/", StaticFiles(directory=str(frontend_dir), html=True), name="frontend")
