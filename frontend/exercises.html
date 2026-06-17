@@ -243,7 +243,11 @@ async function toggleRecording() {
                     if (feedbackData.diff && feedbackData.diff.length > 0) {
                         const diffContainer = document.getElementById('diffOutput');
                         diffContainer.style.display = 'block';
-                        diffContainer.innerHTML = `<div style="margin-bottom:10px;"><b>AI Feedback:</b> ${feedbackData.message}</div><b>Word Analysis:</b><br>`;
+                        diffContainer.innerHTML = `
+                            <div style="margin-bottom:10px;"><b>AI Feedback:</b> ${feedbackData.message}</div>
+                            <div style="margin-bottom:10px; color:#94a3b8; font-style:italic;"><b>What the AI heard:</b> "${data.transcription}"</div>
+                            <b>Word Analysis:</b><br>
+                        `;
                         feedbackData.diff.forEach(item => {
                             let color = 'white';
                             if (item.status === 'correct') color = '#38bdf8'; // Teal/Blue

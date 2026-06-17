@@ -59,7 +59,12 @@ def generate_feedback(expected: str, actual: str, accuracy: float, language_code
         if tag == 'equal':
             for w in expected_words[i1:i2]:
                 diff.append({"word": w, "status": "correct"})
-        elif tag == 'replace' or tag == 'delete':
+        elif tag == 'replace':
+            for w in expected_words[i1:i2]:
+                diff.append({"word": w, "status": "missed"})
+            for w in actual_words[j1:j2]:
+                diff.append({"word": w, "status": "extra"})
+        elif tag == 'delete':
             for w in expected_words[i1:i2]:
                 diff.append({"word": w, "status": "missed"})
         elif tag == 'insert':
