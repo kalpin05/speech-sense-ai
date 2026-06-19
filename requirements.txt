@@ -8,3 +8,6 @@ python-jose[cryptography]
 openai-whisper
 python-Levenshtein
 alembic
+librosa
+soundfile
+scipy

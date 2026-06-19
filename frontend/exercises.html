@@ -134,7 +134,7 @@ async function checkAuth() {
     const token = localStorage.getItem('speechai_token');
     if (!token) { window.location.href = 'index.html'; return null; }
     try {
-        const res = await fetch('http://127.0.0.1:8000/auth/me', {
+        const res = await fetch('/auth/me', {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         if (!res.ok) { window.location.href = 'index.html'; return null; }
@@ -146,7 +146,7 @@ async function checkAuth() {
 
 async function loadExercises() {
     try {
-        const res = await fetch('http://127.0.0.1:8000/exercises?language=english');
+        const res = await fetch('/exercises?language=english');
         if (res.ok) {
             const data = await res.json();
             const grid = document.querySelector('.exercise-grid');
@@ -218,7 +218,7 @@ async function toggleRecording() {
             formData.append('expected_text', target);
 
             try {
-                const res = await fetch('http://127.0.0.1:8000/analyze', {
+                const res = await fetch('/analyze', {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${token}` },
                     body: formData
@@ -235,7 +235,11 @@ async function toggleRecording() {
                     scores.push(s); attempts++; daily++;
                     localStorage.setItem('scores',JSON.stringify(scores));
                     localStorage.setItem('daily',JSON.stringify(daily));
-                    document.getElementById('score').innerText='Score: '+s+'% | Fluency: '+data.fluency;
+                    
+                    const fluencyText = data.fluency_score !== undefined ? `${data.fluency_score}% (${data.fluency})` : data.fluency;
+                    const speedText = data.speech_rate !== undefined ? ` | Speed: ${data.speech_rate} WPM` : '';
+                    const pauseText = data.pause_count !== undefined ? ` | Pauses: ${data.pause_count}` : '';
+                    document.getElementById('score').innerText = `Accuracy: ${s}% | Fluency: ${fluencyText}${speedText}${pauseText}`;
                     document.getElementById('progressFill').style.width=s+'%';
                     updateCharts(); updateUI(); checkBadges(s);
 
