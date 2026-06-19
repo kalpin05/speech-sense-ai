@@ -14,6 +14,7 @@ from app.services.whisper_service import transcribe_audio
 from app.services.analysis_service import (
     calculate_accuracy,
     calculate_fluency,
+    calculate_real_fluency,
     generate_feedback
 )
 from app.utils.language_map import LANGUAGE_MAP
@@ -42,8 +43,22 @@ if _allow_all:
     cors_origins = ["*"]
     allow_credentials = False
 else:
-    raw = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8000")
+    raw = os.getenv("ALLOWED_ORIGINS", "")
+    if not raw:
+        raw = "http://localhost:3000,http://localhost:8000,http://127.0.0.1:8000,http://127.0.0.1:3000"
     cors_origins = [o.strip() for o in raw.split(",") if o.strip()]
+    
+    # Always ensure default local development origins are allowed
+    default_dev_origins = [
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000"
+    ]
+    for o in default_dev_origins:
+        if o not in cors_origins:
+            cors_origins.append(o)
+            
     allow_credentials = os.getenv("ALLOW_CREDENTIALS", "false").lower() in ("1", "true", "yes")
 
 app.add_middleware(
@@ -137,7 +152,14 @@ async def analyze_audio(
 
         # Analysis
         accuracy = calculate_accuracy(expected_text, transcription)
-        fluency = calculate_fluency(transcription, language_code)
+        
+        # Real fluency metrics (speech rate, pause duration/count)
+        fluency_data = calculate_real_fluency(file_path, transcription, language_code)
+        fluency = fluency_data["category"]
+        fluency_score_val = fluency_data["fluency_score"]
+        speech_rate = fluency_data["speech_rate"]
+        pause_count = fluency_data["pause_count"]
+
         feedback = generate_feedback(expected_text, transcription, accuracy, language_code)
 
         # Save to database
@@ -148,6 +170,9 @@ async def analyze_audio(
             language=language,
             accuracy_score=accuracy,
             fluency_score=fluency,
+            fluency_score_val=fluency_score_val,
+            speech_rate=speech_rate,
+            pause_count=pause_count,
             feedback=feedback,
             audio_file_path=file_path
         )
@@ -165,6 +190,9 @@ async def analyze_audio(
             "transcription": transcription,
             "accuracy": accuracy,
             "fluency": fluency,
+            "fluency_score": fluency_score_val,
+            "speech_rate": speech_rate,
+            "pause_count": pause_count,
             "feedback": feedback
         }
 
@@ -201,6 +229,9 @@ def get_all_sessions(skip: int = Query(0, ge=0), limit: int = Query(100, ge=1, l
             "language": s.language,
             "accuracy_score": s.accuracy_score,
             "fluency_score": s.fluency_score,
+            "fluency_score_val": s.fluency_score_val,
+            "speech_rate": s.speech_rate,
+            "pause_count": s.pause_count,
             "feedback": s.feedback,
             "created_at": s.created_at,
         })
@@ -220,6 +251,9 @@ def get_my_sessions(db: Session = Depends(get_db), current_user: user.User = Dep
             "language": s.language,
             "accuracy_score": s.accuracy_score,
             "fluency_score": s.fluency_score,
+            "fluency_score_val": s.fluency_score_val,
+            "speech_rate": s.speech_rate,
+            "pause_count": s.pause_count,
             "feedback": s.feedback,
             "created_at": s.created_at,
         })

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Float, Text, DateTime, ForeignKey
+from sqlalchemy import Column, String, Float, Text, DateTime, ForeignKey, Integer
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 import uuid
@@ -14,6 +14,9 @@ class TherapySession(Base):
     language = Column(String(50), nullable=False)
     accuracy_score = Column(Float, nullable=False)
     fluency_score = Column(String(50), nullable=False)
+    fluency_score_val = Column(Integer, nullable=True)
+    speech_rate = Column(Integer, nullable=True)
+    pause_count = Column(Integer, nullable=True)
     feedback = Column(Text, nullable=False)
     audio_file_path = Column(String(500))
     created_at = Column(DateTime(timezone=True), server_default=func.now())

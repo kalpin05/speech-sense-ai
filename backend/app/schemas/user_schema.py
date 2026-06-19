@@ -35,6 +35,9 @@ class TherapySessionResponse(BaseModel):
     language: str
     accuracy_score: float
     fluency_score: str
+    fluency_score_val: Optional[int] = None
+    speech_rate: Optional[int] = None
+    pause_count: Optional[int] = None
     feedback: str
     created_at: datetime
 
