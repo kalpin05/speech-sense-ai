@@ -10,7 +10,7 @@ import shutil
 import uuid
 import logging
 
-from app.services.whisper_service import transcribe_audio
+from app.services.whisper_service import transcribe_audio, transcribe_audio_detailed
 from app.services.analysis_service import (
     calculate_accuracy,
     calculate_fluency,
@@ -145,7 +145,8 @@ async def analyze_audio(
         # and using Semaphore to prevent Out-Of-Memory crashes
         try:
             async with whisper_semaphore:
-                transcription = await run_in_threadpool(transcribe_audio, file_path, language_code)
+                whisper_result = await run_in_threadpool(transcribe_audio_detailed, file_path, language_code)
+                transcription = whisper_result.get("text", "").strip()
         except Exception as e:
             log.exception("Transcription failed")
             raise HTTPException(status_code=500, detail="Transcription service failed")
@@ -160,7 +161,7 @@ async def analyze_audio(
         speech_rate = fluency_data["speech_rate"]
         pause_count = fluency_data["pause_count"]
 
-        feedback = generate_feedback(expected_text, transcription, accuracy, language_code)
+        feedback = generate_feedback(expected_text, transcription, accuracy, language_code, whisper_result=whisper_result)
 
         # Save to database
         db_session = TherapySession(

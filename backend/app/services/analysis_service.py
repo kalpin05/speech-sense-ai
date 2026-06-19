@@ -168,7 +168,193 @@ def calculate_fluency(transcription: str, language_code: str = "en") -> str:
 
 import difflib
 
-def generate_feedback(expected: str, actual: str, accuracy: float, language_code: str = "en") -> str:
+def clean_word(word: str) -> str:
+    word = word.lower().strip()
+    word = "".join(ch for ch in word if not unicodedata.category(ch).startswith('P'))
+    return word
+
+
+def align_words_needleman_wunsch(expected_words: list[str], transcribed_words: list[dict]) -> list[tuple[int | None, int | None]]:
+    import Levenshtein
+    N = len(expected_words)
+    M = len(transcribed_words)
+    
+    # Initialize DP table
+    dp = [[0.0] * (M + 1) for _ in range(N + 1)]
+    
+    # Base cases
+    for i in range(1, N + 1):
+        dp[i][0] = dp[i-1][0] + 1.0
+    for j in range(1, M + 1):
+        dp[0][j] = dp[0][j-1] + 1.0
+        
+    for i in range(1, N + 1):
+        for j in range(1, M + 1):
+            w_exp = clean_word(expected_words[i-1])
+            w_trans = clean_word(transcribed_words[j-1].get("word", ""))
+            
+            # Match / Mismatch cost
+            if w_exp == w_trans:
+                match_cost = 0.0
+            else:
+                dist = Levenshtein.distance(w_exp, w_trans)
+                max_len = max(len(w_exp), len(w_trans))
+                if max_len > 0 and dist <= 2 and (dist / max_len) <= 0.4:
+                    match_cost = (dist / max_len) * 0.5
+                else:
+                    match_cost = 1.0
+                    
+            dp[i][j] = min(
+                dp[i-1][j-1] + match_cost, # Match / Mismatch
+                dp[i-1][j] + 1.0,           # Deletion (Expected word omitted)
+                dp[i][j-1] + 1.0            # Insertion (Extra word transcribed)
+            )
+            
+    # Backtrack to find alignment path
+    i, j = N, M
+    alignment = []
+    
+    while i > 0 or j > 0:
+        if i > 0 and j > 0:
+            w_exp = clean_word(expected_words[i-1])
+            w_trans = clean_word(transcribed_words[j-1].get("word", ""))
+            if w_exp == w_trans:
+                match_cost = 0.0
+            else:
+                dist = Levenshtein.distance(w_exp, w_trans)
+                max_len = max(len(w_exp), len(w_trans))
+                if max_len > 0 and dist <= 2 and (dist / max_len) <= 0.4:
+                    match_cost = (dist / max_len) * 0.5
+                else:
+                    match_cost = 1.0
+            
+            if abs(dp[i][j] - (dp[i-1][j-1] + match_cost)) < 1e-5:
+                alignment.append((i-1, j-1))
+                i -= 1
+                j -= 1
+                continue
+                
+        if i > 0 and (j == 0 or abs(dp[i][j] - (dp[i-1][j] + 1.0)) < 1e-5):
+            alignment.append((i-1, None))
+            i -= 1
+        else:
+            alignment.append((None, j-1))
+            j -= 1
+            
+    alignment.reverse()
+    return alignment
+
+
+def analyze_pronunciation(expected_text: str, whisper_result: dict, language_code: str = "en") -> dict:
+    expected_words = expected_text.split()
+    
+    # Extract word objects from whisper_result
+    transcribed_words = []
+    if whisper_result and "segments" in whisper_result:
+        for segment in whisper_result.get("segments", []):
+            for w_obj in segment.get("words", []):
+                transcribed_words.append(w_obj)
+                
+    # Fallback to simple matching if no word-level segment objects exist
+    if not transcribed_words:
+        detailed_analysis = []
+        incorrect_words = []
+        actual_text = whisper_result.get("text", "") if isinstance(whisper_result, dict) else ""
+        actual_words = actual_text.split()
+        
+        for exp_word in expected_words:
+            w_exp_clean = clean_word(exp_word)
+            matched = False
+            for act_word in actual_words:
+                if clean_word(act_word) == w_exp_clean:
+                    matched = True
+                    break
+            
+            if matched:
+                detailed_analysis.append({
+                    "word": exp_word,
+                    "status": "correct",
+                    "error_type": "none",
+                    "confidence": 1.0,
+                    "start": 0.0,
+                    "end": 0.0
+                })
+            else:
+                incorrect_words.append(exp_word)
+                detailed_analysis.append({
+                    "word": exp_word,
+                    "status": "incorrect",
+                    "error_type": "mispronounced",
+                    "confidence": 0.0,
+                    "start": 0.0,
+                    "end": 0.0
+                })
+        return {
+            "incorrect_words": incorrect_words,
+            "detailed_analysis": detailed_analysis
+        }
+        
+    # Align sequences using Needleman-Wunsch
+    alignment = align_words_needleman_wunsch(expected_words, transcribed_words)
+    
+    detailed_analysis = []
+    incorrect_words = []
+    
+    # Map expected word index -> transcribed word index
+    expected_map = {}
+    for exp_idx, trans_idx in alignment:
+        if exp_idx is not None:
+            expected_map[exp_idx] = trans_idx
+            
+    for i, exp_word in enumerate(expected_words):
+        trans_idx = expected_map.get(i)
+        
+        if trans_idx is not None:
+            w_obj = transcribed_words[trans_idx]
+            w_trans_clean = clean_word(w_obj.get("word", ""))
+            w_exp_clean = clean_word(exp_word)
+            prob = w_obj.get("probability", 1.0)
+            start = w_obj.get("start", 0.0)
+            end = w_obj.get("end", 0.0)
+            
+            if w_exp_clean != w_trans_clean:
+                status = "incorrect"
+                error_type = "mispronounced"
+                incorrect_words.append(exp_word)
+            elif prob < 0.70:
+                status = "incorrect"
+                error_type = "mispronounced"
+                incorrect_words.append(exp_word)
+            else:
+                status = "correct"
+                error_type = "none"
+                
+            detailed_analysis.append({
+                "word": exp_word,
+                "status": status,
+                "error_type": error_type,
+                "confidence": round(prob, 2),
+                "start": round(start, 2),
+                "end": round(end, 2)
+            })
+        else:
+            incorrect_words.append(exp_word)
+            detailed_analysis.append({
+                "word": exp_word,
+                "status": "incorrect",
+                "error_type": "omitted",
+                "confidence": 0.0,
+                "start": 0.0,
+                "end": 0.0
+            })
+            
+    return {
+        "incorrect_words": incorrect_words,
+        "detailed_analysis": detailed_analysis
+    }
+
+
+def generate_feedback(expected: str, actual: str, accuracy: float, language_code: str = "en", whisper_result: dict = None) -> str:
     translations = FEEDBACK_TRANSLATIONS.get(language_code, FEEDBACK_TRANSLATIONS["en"])
     
     # Generate word-level diff
@@ -193,10 +379,22 @@ def generate_feedback(expected: str, actual: str, accuracy: float, language_code
             for w in actual_words[j1:j2]:
                 diff.append({"word": w, "status": "extra"})
 
-    # Instead of just returning a string, we return a JSON stringified dict or rely on main.py to pass dicts.
-    # To avoid breaking existing database schemas (which expect a string), we'll format the string with HTML/JSON
+    # Detailed pronunciation analysis
+    incorrect_words = []
+    detailed_analysis = []
+    if whisper_result is not None:
+        pron_analysis = analyze_pronunciation(expected, whisper_result, language_code)
+        incorrect_words = pron_analysis["incorrect_words"]
+        detailed_analysis = pron_analysis["detailed_analysis"]
+    else:
+        pron_analysis = analyze_pronunciation(expected, {"text": actual}, language_code)
+        incorrect_words = pron_analysis["incorrect_words"]
+        detailed_analysis = pron_analysis["detailed_analysis"]
+
     import json
     return json.dumps({
         "message": translations["excellent"] if accuracy > 90 else translations["good"] if accuracy > 75 else translations["close"].format(expected=expected) if accuracy > 50 else translations["poor"].format(expected=expected),
-        "diff": diff
+        "diff": diff,
+        "incorrect_words": incorrect_words,
+        "detailed_analysis": detailed_analysis
     })

@@ -243,22 +243,62 @@ async function toggleRecording() {
                     document.getElementById('progressFill').style.width=s+'%';
                     updateCharts(); updateUI(); checkBadges(s);
 
-                    // Diff Output
+                    // Diff & Pronunciation Output
                     if (feedbackData.diff && feedbackData.diff.length > 0) {
                         const diffContainer = document.getElementById('diffOutput');
                         diffContainer.style.display = 'block';
-                        diffContainer.innerHTML = `
-                            <div style="margin-bottom:10px;"><b>AI Feedback:</b> ${feedbackData.message}</div>
-                            <div style="margin-bottom:10px; color:#94a3b8; font-style:italic;"><b>What the AI heard:</b> "${data.transcription}"</div>
-                            <b>Word Analysis:</b><br>
+                        
+                        let htmlContent = `
+                            <div style="margin-bottom:12px;"><b>AI Feedback:</b> ${feedbackData.message}</div>
+                            <div style="margin-bottom:12px; color:#94a3b8; font-style:italic;"><b>What the AI heard:</b> "${data.transcription}"</div>
                         `;
-                        feedbackData.diff.forEach(item => {
-                            let color = 'white';
-                            if (item.status === 'correct') color = '#38bdf8'; // Teal/Blue
-                            else if (item.status === 'missed') color = '#ef4444'; // Red
-                            else if (item.status === 'extra') color = '#facc15'; // Yellow
-                            diffContainer.innerHTML += `<span style="color:${color}; margin-right:4px;">${item.word}</span>`;
-                        });
+                        
+                        // Render detailed pronunciation analysis if available
+                        if (feedbackData.detailed_analysis && feedbackData.detailed_analysis.length > 0) {
+                            htmlContent += `<div style="margin-bottom:10px;"><b>Pronunciation Breakdown:</b></div>`;
+                            feedbackData.detailed_analysis.forEach(item => {
+                                let color = 'white';
+                                let errorBadge = '';
+                                if (item.status === 'correct') {
+                                    color = '#10b981'; // Green for correct
+                                } else if (item.error_type === 'mispronounced') {
+                                    color = '#f97316'; // Orange for mispronounced
+                                    errorBadge = ` <span style="font-size:0.7rem; padding:1px 4px; background:#7c2d12; color:#ffedd5; border-radius:4px;">mispronounced (${Math.round(item.confidence * 100)}%)</span>`;
+                                } else if (item.error_type === 'omitted') {
+                                    color = '#ef4444'; // Red for omitted
+                                    errorBadge = ` <span style="font-size:0.7rem; padding:1px 4px; background:#7f1d1d; color:#fee2e2; border-radius:4px;">omitted</span>`;
+                                }
+                                
+                                const timeStr = (item.start !== 0.0 || item.end !== 0.0) ? `<span style="color:#64748b; font-size:0.75rem; margin-left:4px;">(${item.start}s - ${item.end}s)</span>` : '';
+                                htmlContent += `<div style="margin-bottom:6px; padding:6px 10px; background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.03); border-radius:8px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
+                                    <div>
+                                        <span style="color:${color}; font-weight:600; font-size:1rem;">${item.word}</span>
+                                        ${timeStr}
+                                    </div>
+                                    <div>${errorBadge}</div>
+                                </div>`;
+                            });
+                            
+                            // Render weak words list
+                            if (feedbackData.incorrect_words && feedbackData.incorrect_words.length > 0) {
+                                htmlContent += `<div style="margin-top:14px; padding:10px; background:rgba(249,115,22,0.08); border:1px solid rgba(249,115,22,0.2); border-radius:8px;">
+                                    <b style="color:#f97316;">⚠️ Weak Words to Practice:</b> 
+                                    <span style="color:#fdba74;">${feedbackData.incorrect_words.join(', ')}</span>
+                                </div>`;
+                            }
+                        } else {
+                            // Fallback to simple diff visualizer
+                            htmlContent += `<b>Word Analysis:</b><br>`;
+                            feedbackData.diff.forEach(item => {
+                                let color = 'white';
+                                if (item.status === 'correct') color = '#38bdf8';
+                                else if (item.status === 'missed') color = '#ef4444';
+                                else if (item.status === 'extra') color = '#facc15';
+                                htmlContent += `<span style="color:${color}; margin-right:4px;">${item.word}</span>`;
+                            });
+                        }
+                        
+                        diffContainer.innerHTML = htmlContent;
                     }
                 } else {
                     document.getElementById('targetText').innerText = 'Error: ' + (data.detail || data.message);

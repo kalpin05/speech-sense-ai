@@ -26,3 +26,14 @@ def transcribe_audio(file_path: str, language_code: str):
     )
 
     return result.get("text", "").strip()
+
+
+def transcribe_audio_detailed(file_path: str, language_code: str) -> dict:
+    model = _get_model()
+    result = model.transcribe(
+        file_path,
+        language=language_code,
+        task="transcribe",
+        word_timestamps=True
+    )
+    return result
