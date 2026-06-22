@@ -78,18 +78,54 @@ body{margin-top:60px}
 <div class="stat"><p>⭐ Avg Score</p><h2 id="avg">0%</h2></div>
 </div>
 
+<div style="display:flex; justify-content:space-between; align-items:center; margin-top:25px; margin-bottom:15px; flex-wrap:wrap; gap:10px;">
+  <h3 style="margin:0;">📚 Standard Exercises</h3>
+  <div style="display:flex; gap:8px; flex-wrap:wrap;">
+    <button class="filter-btn active" onclick="setDifficulty('', this)" style="padding:6px 12px; background:#38bdf8; border:none; border-radius:8px; color:#0f172a; font-weight:600; cursor:pointer; transition:.2s;">All</button>
+    <button class="filter-btn" onclick="setDifficulty('beginner', this)" style="padding:6px 12px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:white; font-weight:600; cursor:pointer; transition:.2s;">Beginner</button>
+    <button class="filter-btn" onclick="setDifficulty('intermediate', this)" style="padding:6px 12px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:white; font-weight:600; cursor:pointer; transition:.2s;">Intermediate</button>
+    <button class="filter-btn" onclick="setDifficulty('advanced', this)" style="padding:6px 12px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:white; font-weight:600; cursor:pointer; transition:.2s;">Advanced</button>
+  </div>
+</div>
+
 <div class="exercise-grid">
-<div class="card"><h3>Basic</h3><button class="btn" onclick="startExercise('Hello World')">Start</button></div>
-<div class="card"><h3>Fluency</h3><button class="btn" onclick="startExercise('How are you')">Start</button></div>
-<div class="card"><h3>Advanced</h3><button class="btn" onclick="startExercise('AI is powerful')">Start</button></div>
-<div class="card"><h3>Challenge</h3><button class="btn" onclick="startExercise('Machine learning improves speech')">Start</button></div>
+  <!-- Loaded Dynamically -->
+</div>
+
+<div class="game-box" id="adaptiveDashboard" style="margin-top:25px; text-align:left; background:rgba(56,189,248,0.06); border:1px solid rgba(56,189,248,0.15); display:none; padding:20px; border-radius:15px;">
+  <h3 style="color:#38bdf8; display:flex; align-items:center; gap:8px; margin-top:0;">🎯 Personalized Practice Dashboard</h3>
+  <p style="color:#94a3b8; font-size:0.9rem; margin-bottom:12px;">Based on your recent exercise mistakes, here are your personalized recommendations:</p>
+  
+  <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:15px; margin-bottom:15px;">
+    <div style="background:rgba(255,255,255,0.03); padding:12px; border-radius:10px; border:1px solid rgba(255,255,255,0.05);">
+      <h4 style="margin-top:0; color:#fdba74; margin-bottom:6px;">⚠️ Weak Words</h4>
+      <div id="weakWordsList" style="font-size:0.9rem; color:#f97316; font-weight:600;">None detected yet</div>
+    </div>
+    <div style="background:rgba(255,255,255,0.03); padding:12px; border-radius:10px; border:1px solid rgba(255,255,255,0.05);">
+      <h4 style="margin-top:0; color:#a5b4fc; margin-bottom:6px;">🔊 Weak Sounds / Patterns</h4>
+      <div id="weakSoundsList" style="font-size:0.9rem; color:#818cf8; font-weight:600;">None detected yet</div>
+    </div>
+  </div>
+  
+  <div style="background:rgba(56,189,248,0.08); padding:15px; border-radius:12px; border:1px solid rgba(56,189,248,0.2); margin-bottom:15px;">
+    <h4 style="margin-top:0; color:#38bdf8; margin-bottom:4px;">⚡ Generated Custom Practice Drill</h4>
+    <p id="customDrillText" style="font-size:1.05rem; font-weight:600; margin:8px 0; color:white;">--</p>
+    <button class="btn" style="width:auto; padding:8px 16px; margin:0;" onclick="startCustomDrill()">Load Practice Drill</button>
+  </div>
+  
+  <div>
+    <h4 style="margin-top:0; color:#e2e8f0; margin-bottom:8px;">💡 Recommended Exercises</h4>
+    <div id="recExercisesList" style="display:flex; flex-direction:column; gap:8px;">
+      <!-- Loaded dynamically -->
+    </div>
+  </div>
 </div>
 
 <div class="game-box">
-<h3>⚡ Speed Challenge Mode</h3>
-<p>Speak before time runs out!</p>
-<div class="timer" id="timer">Time: 10</div>
-<button class="btn" onclick="startGameMode()">Start Game</button>
+  <h3>⚡ Speed Challenge Mode</h3>
+  <p>Speak before time runs out!</p>
+  <div class="timer" id="timer">Time: 10</div>
+  <button class="btn" onclick="startGameMode()">Start Game</button>
 </div>
 
 <div class="recorder">
@@ -144,13 +180,39 @@ async function checkAuth() {
     }
 }
 
+let currentDifficulty = '';
+
+function setDifficulty(diff, btn) {
+    currentDifficulty = diff;
+    
+    // Update active button state
+    document.querySelectorAll('.filter-btn').forEach(b => {
+        b.classList.remove('active');
+        b.style.background = 'rgba(255,255,255,0.05)';
+        b.style.border = '1px solid rgba(255,255,255,0.1)';
+        b.style.color = 'white';
+    });
+    btn.classList.add('active');
+    btn.style.background = '#38bdf8';
+    btn.style.border = 'none';
+    btn.style.color = '#0f172a';
+    
+    loadExercises();
+}
+
 async function loadExercises() {
     try {
-        const res = await fetch('/exercises?language=english');
+        const res = await fetch(`/exercises?language=english&difficulty=${currentDifficulty}`);
         if (res.ok) {
             const data = await res.json();
             const grid = document.querySelector('.exercise-grid');
             grid.innerHTML = '';
+            
+            if (data.exercises.length === 0) {
+                grid.innerHTML = '<div style="grid-column: 1/-1; padding: 20px; text-align: center; color: #94a3b8;">No exercises found for this level.</div>';
+                return;
+            }
+            
             data.exercises.forEach((ex, idx) => {
                 const labels = ["Basic", "Fluency", "Advanced", "Challenge"];
                 const lbl = labels[idx % labels.length];
@@ -158,6 +220,71 @@ async function loadExercises() {
             });
         }
     } catch(e) {}
+}
+
+async function loadAdaptiveExercises() {
+    const token = localStorage.getItem('speechai_token');
+    if (!token) return;
+    
+    try {
+        const res = await fetch('/exercises/adaptive?language=english', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+            const data = await res.json();
+            const dash = document.getElementById('adaptiveDashboard');
+            dash.style.display = 'block';
+            
+            // Weak words
+            const wList = document.getElementById('weakWordsList');
+            if (data.weak_words && data.weak_words.length > 0) {
+                wList.innerText = data.weak_words.join(', ');
+                wList.style.color = '#f97316';
+            } else {
+                wList.innerText = 'None detected yet. Keep practicing!';
+                wList.style.color = '#10b981';
+            }
+            
+            // Weak sounds
+            const sList = document.getElementById('weakSoundsList');
+            if (data.weak_sounds && data.weak_sounds.length > 0) {
+                sList.innerText = data.weak_sounds.map(s => `/${s}/`).join(', ');
+                sList.style.color = '#818cf8';
+            } else {
+                sList.innerText = 'None detected yet.';
+                sList.style.color = '#10b981';
+            }
+            
+            // Custom drill
+            document.getElementById('customDrillText').innerText = data.custom_drill;
+            
+            // Recommended exercises
+            const recContainer = document.getElementById('recExercisesList');
+            recContainer.innerHTML = '';
+            if (data.recommended_exercises && data.recommended_exercises.length > 0) {
+                data.recommended_exercises.forEach(ex => {
+                    recContainer.innerHTML += `
+                        <div style="background:rgba(255,255,255,0.02); padding:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.04); display:flex; justify-content:space-between; align-items:center; gap:10px;">
+                            <span style="font-size:0.9rem; color:#e2e8f0;">${ex}</span>
+                            <button class="btn" style="width:auto; padding:6px 12px; margin:0; font-size:0.8rem;" onclick="startExercise('${ex.replace(/'/g, "\\'")}')">Start</button>
+                        </div>
+                    `;
+                });
+            } else {
+                recContainer.innerHTML = '<div style="font-size:0.9rem; color:#94a3b8; font-style:italic;">No recommendations found. Try doing some standard exercises first!</div>';
+            }
+        }
+    } catch(e) {}
+}
+
+function startCustomDrill() {
+    const drill = document.getElementById('customDrillText').innerText;
+    if (drill && !drill.startsWith("Excellent job")) {
+        const cleanDrill = drill.replace("Practice saying these words: ", "");
+        startExercise(cleanDrill);
+    } else {
+        alert("No weak words to drill yet! Practice some regular exercises first.");
+    }
 }
 
 function updateUI(){
@@ -241,7 +368,7 @@ async function toggleRecording() {
                     const pauseText = data.pause_count !== undefined ? ` | Pauses: ${data.pause_count}` : '';
                     document.getElementById('score').innerText = `Accuracy: ${s}% | Fluency: ${fluencyText}${speedText}${pauseText}`;
                     document.getElementById('progressFill').style.width=s+'%';
-                    updateCharts(); updateUI(); checkBadges(s);
+                    updateCharts(); updateUI(); checkBadges(s); loadAdaptiveExercises();
 
                     // Diff & Pronunciation Output
                     if (feedbackData.diff && feedbackData.diff.length > 0) {
@@ -355,6 +482,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     if (token) {
         updateUI();
         loadExercises();
+        loadAdaptiveExercises();
     }
 });
 </script>
