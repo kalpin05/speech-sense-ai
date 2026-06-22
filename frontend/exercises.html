@@ -214,10 +214,15 @@ async function loadExercises() {
             }
             
             data.exercises.forEach((ex, idx) => {
-                const labels = ["Basic", "Fluency", "Advanced", "Challenge"];
-                const lbl = labels[idx % labels.length];
+                const diffLabel = currentDifficulty ? currentDifficulty.charAt(0).toUpperCase() + currentDifficulty.slice(1) : "Exercise";
+                const lbl = `${diffLabel} ${idx + 1}`;
                 grid.innerHTML += `<div class="card"><h3>${lbl}</h3><p style="font-size:0.8rem; color:#8fa5bc; height:40px; overflow:hidden;">${ex}</p><button class="btn" onclick="startExercise('${ex.replace(/'/g, "\\'")}')">Start</button></div>`;
             });
+            
+            // Auto-select the first exercise of the loaded category
+            if (data.exercises.length > 0) {
+                startExercise(data.exercises[0]);
+            }
         }
     } catch(e) {}
 }
