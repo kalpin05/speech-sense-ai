@@ -8,12 +8,15 @@ class UserCreate(BaseModel):
     password: str
     first_name: Optional[str] = None
     last_name: Optional[str] = None
+    role: Optional[str] = "patient"
 
 class UserResponse(BaseModel):
     id: UUID
     email: EmailStr
     first_name: Optional[str] = None
     last_name: Optional[str] = None
+    role: str
+    therapist_id: Optional[UUID] = None
     created_at: datetime
 
     class Config:
