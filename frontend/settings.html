@@ -76,6 +76,20 @@ body{margin-top:60px}
 <button class="btn" onclick="changeName()">Edit Profile</button>
 </div>
 
+<div class="section" id="therapistLinkageSection" style="display:none;">
+  <h3>👨‍⚕️ Speech Therapist Linkage</h3>
+  <div id="linkedTherapistInfo" style="margin-bottom:12px; font-size:0.95rem; color:#94a3b8;">
+    Current Therapist: <span id="therapistName" style="color:white; font-weight:600;">None linked</span>
+  </div>
+  <div id="linkForm" class="row" style="gap:10px;">
+    <input type="email" id="therapistEmailInput" placeholder="Enter therapist's email" style="flex:1; padding:8px 12px; border-radius:8px; border:1px solid rgba(255,255,255,0.1); background:rgba(0,0,0,0.2); color:white; outline:none;">
+    <button class="btn" style="width:auto; margin:0; padding:8px 16px;" onclick="linkTherapist()">Link</button>
+  </div>
+  <div id="unlinkForm" style="display:none;">
+    <button class="btn" style="background:#ef4444; color:white; margin:0; padding:8px 16px; width:auto;" onclick="unlinkTherapist()">Unlink Therapist</button>
+  </div>
+</div>
+
 <div class="section">
 <h3>📚 Learning</h3>
 <div class="row"><span>Daily Goal</span><select id="goal"><option>5</option><option>10</option><option>15</option></select></div>
@@ -153,9 +167,88 @@ async function loadProfile() {
     if (res.ok) {
       const user = await res.json();
       document.getElementById('username').innerText = user.first_name || 'User';
+      
+      if (user.role === 'patient') {
+        document.getElementById('therapistLinkageSection').style.display = 'block';
+        loadLinkedTherapist();
+      }
     }
   } catch (err) {
     console.error('Failed to load profile', err);
+  }
+}
+
+async function loadLinkedTherapist() {
+  try {
+    const res = await fetch('/users/me/therapist', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const therapist = data.therapist;
+      const infoSpan = document.getElementById('therapistName');
+      const linkF = document.getElementById('linkForm');
+      const unlinkF = document.getElementById('unlinkForm');
+      
+      if (therapist) {
+        infoSpan.innerText = `${therapist.first_name || ''} ${therapist.last_name || ''} (${therapist.email})`;
+        infoSpan.style.color = '#38bdf8';
+        linkF.style.display = 'none';
+        unlinkF.style.display = 'block';
+      } else {
+        infoSpan.innerText = 'None linked';
+        infoSpan.style.color = '#94a3b8';
+        linkF.style.display = 'flex';
+        unlinkF.style.display = 'none';
+      }
+    }
+  } catch (err) {
+    console.error('Failed to load linked therapist', err);
+  }
+}
+
+async function linkTherapist() {
+  const email = document.getElementById('therapistEmailInput').value.trim();
+  if (!email) { alert('Please enter therapist email.'); return; }
+  
+  try {
+    const res = await fetch('/users/me/link-therapist', {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ therapist_email: email })
+    });
+    
+    if (res.ok) {
+      showToast();
+      loadLinkedTherapist();
+    } else {
+      const err = await res.json();
+      alert(err.detail || 'Failed to link therapist.');
+    }
+  } catch (err) {
+    alert('Link request failed.');
+  }
+}
+
+async function unlinkTherapist() {
+  if (!confirm('Are you sure you want to unlink from your therapist?')) return;
+  
+  try {
+    const res = await fetch('/users/me/link-therapist', {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (res.ok) {
+      showToast();
+      loadLinkedTherapist();
+    } else {
+      alert('Failed to unlink therapist.');
+    }
+  } catch (err) {
+    alert('Unlink request failed.');
   }
 }
 
