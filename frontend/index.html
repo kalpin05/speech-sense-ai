@@ -1039,6 +1039,16 @@ footer {
           <button class="eye-btn" onclick="togglePass('regPassConf',this)" type="button"><i class="fa-solid fa-eye"></i></button>
         </div>
       </div>
+      <div class="form-field">
+        <label>Account Role</label>
+        <div class="input-wrap" style="position:relative;">
+          <i class="fa-solid fa-user-doctor ico" style="position:absolute; left:15px; top:50%; transform:translateY(-50%); color:#64748b;"></i>
+          <select id="regRole" style="width:100%; height:50px; border:1px solid rgba(255,255,255,0.1); border-radius:10px; background:rgba(255,255,255,0.03); color:white; font-size:15px; outline:none; padding-left:45px; cursor:pointer;">
+            <option value="patient" style="background:#0f172a; color:white;">Patient / Student</option>
+            <option value="therapist" style="background:#0f172a; color:white;">Speech Therapist</option>
+          </select>
+        </div>
+      </div>
       <button class="btn-auth" onclick="handleRegister()">
         <i class="fa-solid fa-user-plus"></i> <span data-i18n="createAccount">Create Free Account</span>
       </button>
@@ -2219,11 +2229,27 @@ async function handleLogin() {
     if (!res.ok) { showToast('Invalid credentials.'); return; }
     const data = await res.json();
     localStorage.setItem('speechai_token', data.access_token);
-    localStorage.setItem('username', email.split('@')[0]);
-    showSuccess('Welcome back! 👋', `You're now logged in to SpeechAI.`);
-    setTimeout(() => {
-      window.location.href = 'dashboard.html';
-    }, 1400);
+    
+    // Fetch profile to verify role and redirect accordingly
+    const profileRes = await fetch('/auth/me', {
+      headers: {'Authorization': `Bearer ${data.access_token}`}
+    });
+    if (profileRes.ok) {
+      const user = await profileRes.json();
+      localStorage.setItem('speechai_role', user.role);
+      localStorage.setItem('username', user.first_name || email.split('@')[0]);
+      
+      showSuccess('Welcome back! 👋', `You're now logged in to SpeechAI.`);
+      setTimeout(() => {
+        if (user.role === 'therapist') {
+          window.location.href = 'therapist-dashboard.html';
+        } else {
+          window.location.href = 'dashboard.html';
+        }
+      }, 1400);
+    } else {
+      showToast('Failed to fetch user profile.');
+    }
   } catch (err) {
     showToast('Login failed. Backend not running.');
   }
@@ -2234,6 +2260,8 @@ async function handleRegister() {
   const email = document.getElementById('regEmail').value.trim();
   const pass  = document.getElementById('regPass').value;
   const conf  = document.getElementById('regPassConf').value;
+  const role  = document.getElementById('regRole').value;
+  
   if (!first || !email || !pass) { showToast('Please fill in all required fields.'); return; }
   if (pass !== conf) { showToast('Passwords do not match.'); return; }
   if (pass.length < 6) { showToast('Password must be at least 6 characters.'); return; }
@@ -2242,17 +2270,34 @@ async function handleRegister() {
     const res = await fetch('/auth/register', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({email: email, password: pass, first_name: first, last_name: ""})
+      body: JSON.stringify({email: email, password: pass, first_name: first, last_name: "", role: role})
     });
     if (!res.ok) { 
         const err = await res.json();
         showToast(err.detail || 'Registration failed.'); 
         return; 
     }
+    
+    // Auto-login after successful registration
+    const loginRes = await fetch('/auth/login', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      body: new URLSearchParams({username: email, password: pass})
+    });
+    if (loginRes.ok) {
+      const loginData = await loginRes.json();
+      localStorage.setItem('speechai_token', loginData.access_token);
+      localStorage.setItem('speechai_role', role);
+    }
+    
     localStorage.setItem('username', first);
-    showSuccess('Account created! 🎉', `Welcome, ${first}! Redirecting to dashboard...`);
+    showSuccess('Account created! 🎉', `Welcome, ${first}! Redirecting...`);
     setTimeout(() => {
-      window.location.href = 'dashboard.html';
+      if (role === 'therapist') {
+        window.location.href = 'therapist-dashboard.html';
+      } else {
+        window.location.href = 'dashboard.html';
+      }
     }, 1400);
   } catch (err) {
     showToast('Registration failed. Backend not running.');
