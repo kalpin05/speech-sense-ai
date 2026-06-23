@@ -8,8 +8,11 @@ from sqlalchemy import pool
 
 from alembic import context
 
-# add project root to sys.path so `app` can be imported
+# add project root and backend to sys.path so `app` can be imported
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+backend_dir = os.path.join(ROOT_DIR, "backend")
+if backend_dir not in sys.path:
+    sys.path.append(backend_dir)
 if ROOT_DIR not in sys.path:
     sys.path.append(ROOT_DIR)
 
