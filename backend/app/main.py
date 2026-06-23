@@ -20,7 +20,7 @@ from app.services.analysis_service import (
 from app.utils.language_map import LANGUAGE_MAP
 from app.database import engine, Base, get_db
 from sqlalchemy.orm import Session
-from app.api.endpoints import auth, users
+from app.api.endpoints import auth, users, therapist
 from app.models import user, session_model
 from app.models.session_model import TherapySession
 from app.schemas.user_schema import UserResponse, TherapySessionResponse
@@ -72,6 +72,7 @@ app.add_middleware(
 # Routers
 app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
 app.include_router(users.router, prefix="/users", tags=["Users"])
+app.include_router(therapist.router, prefix="/therapist", tags=["Therapist"])
 
 # Upload folder (kept inside backend/uploads)
 UPLOAD_FOLDER = Path(__file__).resolve().parents[1] / "uploads"
