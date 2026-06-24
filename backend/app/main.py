@@ -181,9 +181,18 @@ async def analyze_audio(
         try:
             db.add(db_session)
             db.commit()
+            
+            # Update user gamification metrics and evaluate badge unlocks
+            current_user.xp += 10
+            current_user.level = (current_user.xp // 100) + 1
+            
+            from app.services.gamification_service import check_and_unlock_badges
+            check_and_unlock_badges(current_user.id, db, accuracy)
+            
+            db.commit()
         except Exception:
             db.rollback()
-            log.exception("Database commit failed for new therapy session")
+            log.exception("Database commit failed for new therapy session or gamification metrics")
             raise HTTPException(status_code=500, detail="Failed to save session")
 
         return {
