@@ -110,3 +110,20 @@ def get_linked_therapist(current_user: User = Depends(get_current_user), db: Ses
             "email": therapist.email
         }
     }
+
+@router.get("/therapists")
+def get_all_therapists(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Get all registered therapists."""
+    therapists = db.query(User).filter(User.role == "therapist").all()
+    return {
+        "therapists": [
+            {
+                "id": str(t.id),
+                "first_name": t.first_name,
+                "last_name": t.last_name,
+                "email": t.email
+            }
+            for t in therapists
+        ]
+    }
+
