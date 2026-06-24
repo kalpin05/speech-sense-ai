@@ -17,6 +17,8 @@ class UserResponse(BaseModel):
     last_name: Optional[str] = None
     role: str
     therapist_id: Optional[UUID] = None
+    xp: int
+    level: int
     created_at: datetime
 
     class Config:
