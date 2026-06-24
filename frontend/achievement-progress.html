@@ -118,50 +118,48 @@ if (!token) {
 }
 
 let scores = [];
-let streak = 0;
+let progressChart, performanceChart;
 
-async function fetchSessions() {
+async function loadData() {
   try {
-    const res = await fetch('/users/me/sessions', {
+    // 1. Fetch Analytics
+    const anaRes = await fetch('/users/me/analytics', {
       headers: { 'Authorization': `Bearer ${token}` }
     });
-    if (res.ok) {
-      const data = await res.json();
-      const my_sessions = data.my_sessions;
+    if (anaRes.ok) {
+      const anaData = await anaRes.json();
+      document.getElementById('attempts').innerText = anaData.total_attempts;
+      document.getElementById('avg').innerText = anaData.average_score + '%';
+      document.getElementById('best').innerText = anaData.best_score + '%';
+      document.getElementById('streak').innerText = anaData.streak + ' 🔥';
       
-      const chronological = [...my_sessions].reverse();
-      scores = chronological.map(s => s.accuracy_score);
-      streak = my_sessions.length > 0 ? 1 : 0; // Simple streak mockup for now
-
-      updateUI();
+      scores = anaData.sessions.map(s => s.accuracy_score);
+      
+      loadTimeline(anaData.sessions);
+      drawCharts(anaData.average_score);
+    }
+    
+    // 2. Fetch Gamification
+    const gamRes = await fetch('/users/me/gamification', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (gamRes.ok) {
+      const gamData = await gamRes.json();
+      const xp = gamData.xp;
+      const level = gamData.level;
+      const progressPct = gamData.progress_pct;
+      
+      document.getElementById('levelText').innerText = 'Level ' + level + ' (' + xp + ' XP)';
+      document.getElementById('levelFill').style.width = progressPct + '%';
+      
+      applyBadges(gamData.badges);
     }
   } catch (err) {
-    console.error('Failed to load sessions', err);
+    console.error('Failed to load progress data', err);
   }
 }
 
-function avg() { if(scores.length==0) return 0; return Math.floor(scores.reduce((a,b)=>a+b,0)/scores.length); }
-function best() { if(scores.length==0) return 0; return Math.max(...scores); }
-
-let progressChart, performanceChart;
-
-function updateUI(){
-  document.getElementById('attempts').innerText = scores.length;
-  document.getElementById('avg').innerText = avg() + '%';
-  document.getElementById('best').innerText = best() + '%';
-  document.getElementById('streak').innerText = streak + ' 🔥';
-
-  let level = Math.floor(scores.length/5)+1;
-  let progress = (scores.length%5)*20;
-  document.getElementById('levelText').innerText = 'Level ' + level;
-  document.getElementById('levelFill').style.width = progress + '%';
-
-  checkBadges();
-  loadTimeline();
-  drawCharts();
-}
-
-function drawCharts() {
+function drawCharts(averageScore) {
   if (progressChart) progressChart.destroy();
   if (performanceChart) performanceChart.destroy();
 
@@ -173,28 +171,29 @@ function drawCharts() {
 
   performanceChart = new Chart(document.getElementById('performanceChart'), {
     type:'doughnut',
-    data:{labels:['Avg','Remaining'],datasets:[{data:[avg(),100-avg()], backgroundColor: ['#22c55e', '#1e293b']}]},
+    data:{labels:['Avg','Remaining'],datasets:[{data:[averageScore, 100-averageScore], backgroundColor: ['#22c55e', '#1e293b']}]},
     options:{plugins:{legend:{labels:{color:'white'}}}}
   });
 }
 
-function checkBadges(){
-  if(scores.length>=1) activate('b1');
-  if(scores.some(s=>s>=80)) activate('b2');
-  if(scores.some(s=>s>=90)) activate('b3');
-  if(streak>=5) activate('b4');
-  if(scores.length>=10) activate('b5');
-  if(avg()>=85) activate('b6');
+function applyBadges(badgeIds) {
+  // Reset all badges to inactive
+  document.querySelectorAll('.badge').forEach(el => el.classList.remove('active'));
+  // Activate unlocked ones
+  badgeIds.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.add('active');
+  });
 }
-function activate(id){ document.getElementById(id).classList.add('active'); }
 
-function loadTimeline(){
+function loadTimeline(sessions) {
   let container = document.getElementById('timelineData');
   container.innerHTML = '';
-  scores.slice(-5).reverse().forEach((s,i)=>{
+  sessions.slice(-5).reverse().forEach((s, i) => {
     let div = document.createElement('div');
     div.className = 'timeline-item';
-    div.innerText = 'Attempt '+(scores.length-i)+' → Score: '+s+'%';
+    let dateStr = new Date(s.created_at).toLocaleDateString();
+    div.innerText = `${dateStr} → Attempt ${sessions.length - i} → Score: ${s.accuracy_score}%`;
     container.appendChild(div);
   });
 }
@@ -207,7 +206,7 @@ function logout() {
   }
 }
 
-fetchSessions();
+loadData();
 </script>
 
 </body>
