@@ -127,3 +127,48 @@ def get_all_therapists(current_user: User = Depends(get_current_user), db: Sessi
         ]
     }
 
+@router.get("/me/gamification")
+def get_user_gamification(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Get user's XP, level, progress inside level, and list of unlocked badges."""
+    from app.models.badge_model import UserBadge
+    badges = db.query(UserBadge).filter(UserBadge.user_id == current_user.id).all()
+    badge_list = [b.badge_id for b in badges]
+    return {
+        "xp": current_user.xp,
+        "level": current_user.level,
+        "progress_pct": current_user.xp % 100,
+        "badges": badge_list
+    }
+
+@router.get("/me/analytics")
+def get_user_analytics(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Calculate and return session analytics and progress trends for the user."""
+    sessions = db.query(TherapySession).filter(TherapySession.user_id == current_user.id).order_by(TherapySession.created_at.asc()).all()
+    total_attempts = len(sessions)
+    
+    avg_score = 0
+    best_score = 0
+    if total_attempts > 0:
+        avg_score = int(sum(s.accuracy_score for s in sessions) / total_attempts)
+        best_score = int(max(s.accuracy_score for s in sessions))
+        
+    from app.services.gamification_service import calculate_streak
+    streak = calculate_streak(sessions)
+    
+    session_data = [
+        {
+            "accuracy_score": s.accuracy_score,
+            "created_at": s.created_at.isoformat()
+        }
+        for s in sessions
+    ]
+    
+    return {
+        "total_attempts": total_attempts,
+        "average_score": avg_score,
+        "best_score": best_score,
+        "streak": streak,
+        "sessions": session_data
+    }
+
+
