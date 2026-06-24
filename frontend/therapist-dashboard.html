@@ -75,6 +75,20 @@ nav{position:fixed;top:0;left:0;right:0;height:60px;display:flex;align-items:cen
 <div class="container">
   <h1>👨‍⚕️ Therapist Dashboard</h1>
   
+  <!-- Profile info showing therapist's email for linking -->
+  <div style="background:rgba(56,189,248,0.08); border:1px solid rgba(56,189,248,0.2); padding:15px; border-radius:15px; margin-top:20px; margin-bottom:20px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:15px;">
+    <div>
+      <h2 style="font-size:1.15rem; color:#38bdf8; margin:0;" id="therapistNameDisplay">Therapist Profile</h2>
+      <p style="margin:4px 0 0 0; font-size:0.9rem; color:#94a3b8;">
+        Patients can link to you by entering your email address in their settings screen: 
+        <strong style="color:white; font-size:0.95rem; background:rgba(0,0,0,0.25); padding:3px 8px; border-radius:6px; border:1px solid rgba(255,255,255,0.05); margin-left:4px;" id="therapistEmailDisplay">loading...</strong>
+      </p>
+    </div>
+    <div style="font-size:0.8rem; padding:4px 8px; background:rgba(255,255,255,0.05); border-radius:6px; border:1px solid rgba(255,255,255,0.05); color:#a5b4fc; font-weight:600;">
+      🩺 Speech Therapist
+    </div>
+  </div>
+  
   <div class="dashboard-layout">
     <!-- LEFT PANEL: Patients -->
     <div class="panel">
@@ -154,7 +168,13 @@ async function checkAuth() {
         const user = await res.json();
         if (user.role !== 'therapist') {
             window.location.href = 'dashboard.html';
+            return;
         }
+        
+        // Render therapist email & profile details
+        document.getElementById('therapistEmailDisplay').innerText = user.email;
+        const therapistName = `${user.first_name || ''} ${user.last_name || ''}`.trim() || 'Therapist';
+        document.getElementById('therapistNameDisplay').innerText = `🩺 Therapist: ${therapistName}`;
     } catch(e) {
         window.location.href = 'index.html';
     }
