@@ -4,7 +4,7 @@ from app.database import get_db
 from app.models.user import User
 from app.models.session_model import TherapySession
 from app.services.auth_service import get_current_user
-from app.main import EXERCISES_DB
+from app.utils.exercises_db import EXERCISES_DB
 import json
 import logging
 from uuid import UUID
