@@ -18,7 +18,7 @@ from app.services.analysis_service import (
     generate_feedback
 )
 from app.utils.language_map import LANGUAGE_MAP
-from app.database import engine, Base, get_db
+from app.database import engine, Base, get_db, SessionLocal
 from sqlalchemy.orm import Session
 from app.api.endpoints import auth, users, therapist
 from app.models import user, session_model
@@ -272,29 +272,86 @@ def get_my_sessions(db: Session = Depends(get_db), current_user: user.User = Dep
 
 
 from app.utils.exercises_db import EXERCISES_DB
+from typing import Optional
+from fastapi.security import OAuth2PasswordBearer
+from jose import jwt
+from app.config import SECRET_KEY, ALGORITHM
 
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
+
+def get_optional_current_user(token: Optional[str] = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get("sub")
+        if email is None:
+            return None
+        return db.query(user.User).filter(user.User.email == email).first()
+    except Exception:
+        return None
+
+def seed_exercises(db: Session):
+    """Seed default exercises into database if empty."""
+    from app.models.exercise_model import Exercise
+    exists = db.query(Exercise).filter(Exercise.user_id.is_(None)).first()
+    if exists:
+        return
+        
+    log.info("Seeding standard exercises into database...")
+    for language, difficulties in EXERCISES_DB.items():
+        for difficulty, contents in difficulties.items():
+            for content in contents:
+                db_exercise = Exercise(
+                    language=language,
+                    difficulty=difficulty,
+                    content=content
+                )
+                db.add(db_exercise)
+    db.commit()
+
+@app.on_event("startup")
+def on_startup():
+    db = SessionLocal()
+    try:
+        seed_exercises(db)
+    finally:
+        db.close()
 
 @app.get("/exercises")
-def get_exercises(language: str = "english", difficulty: str = None):
-    """Return some predefined exercises for the user to read based on language and difficulty."""
-    lang = language.lower()
-    if lang not in EXERCISES_DB:
-        lang = "english"
-        
-    db_by_lang = EXERCISES_DB[lang]
+def get_exercises(
+    language: str = "english",
+    difficulty: str = None,
+    db: Session = Depends(get_db),
+    current_user: Optional[user.User] = Depends(get_optional_current_user)
+):
+    """Return standard pre-seeded exercises and optionally user's custom generated exercises."""
+    from app.models.exercise_model import Exercise
     
+    # Query standard public exercises
+    query = db.query(Exercise).filter(
+        Exercise.language.ilike(language),
+        Exercise.user_id.is_(None)
+    )
     if difficulty:
-        diff = difficulty.lower()
-        if diff in db_by_lang:
-            return {"exercises": db_by_lang[diff]}
-        # If invalid difficulty, fall back to empty list
-        return {"exercises": []}
+        query = query.filter(Exercise.difficulty.ilike(difficulty))
+    standard_exercises = query.order_by(Exercise.created_at.asc()).all()
+    
+    # Query custom generated exercises
+    custom_exercises = []
+    if current_user:
+        custom_query = db.query(Exercise).filter(
+            Exercise.language.ilike(language),
+            Exercise.user_id == current_user.id
+        )
+        if difficulty:
+            custom_query = custom_query.filter(Exercise.difficulty.ilike(difficulty))
+        custom_exercises = custom_query.order_by(Exercise.created_at.desc()).all()
         
-    # If no difficulty specified, return all flattened exercises for backward compatibility
-    all_ex = []
-    for diff, items in db_by_lang.items():
-        all_ex.extend(items)
-    return {"exercises": all_ex}
+    return {
+        "exercises": [ex.content for ex in standard_exercises],
+        "custom_exercises": [ex.content for ex in custom_exercises]
+    }
 
 
 @app.get("/exercises/adaptive")
@@ -378,6 +435,82 @@ def get_adaptive_exercises(
         "weak_sounds": top_weak_sounds,
         "custom_drill": custom_drill,
         "recommended_exercises": recommended_exercises
+    }
+
+from pydantic import BaseModel
+
+class GenerateExerciseRequest(BaseModel):
+    language: str = "english"
+    difficulty: str = "beginner"
+    exercise_type: str = "sentence"  # passage, drill, sentence, repetition
+    focus_weak_sounds: bool = False
+
+@app.post("/exercises/generate")
+def generate_exercises_endpoint(
+    payload: GenerateExerciseRequest,
+    db: Session = Depends(get_db),
+    current_user: user.User = Depends(get_current_user)
+):
+    """Generate custom exercises using LLM (with template fallback) and save to database."""
+    # 1. If focus_weak_sounds is True, fetch user's weak sounds
+    weak_sounds = []
+    if payload.focus_weak_sounds:
+        sessions = db.query(TherapySession).filter(
+            TherapySession.user_id == current_user.id,
+            TherapySession.language.ilike(payload.language)
+        ).order_by(TherapySession.created_at.desc()).limit(10).all()
+        
+        word_counts = {}
+        for s in sessions:
+            try:
+                import json
+                fb_data = json.loads(s.feedback)
+                inc_words = fb_data.get("incorrect_words", [])
+                for w in inc_words:
+                    w_clean = w.lower().strip()
+                    if w_clean:
+                        word_counts[w_clean] = word_counts.get(w_clean, 0) + 1
+            except Exception:
+                continue
+        sorted_weak_words = sorted(word_counts.items(), key=lambda x: x[1], reverse=True)
+        weak_words = [w for w, count in sorted_weak_words][:5]
+        
+        sound_patterns = ["th", "sh", "ch", "wh", "ph", "tr", "pl", "gr", "st", "sp", "h", "s", "f", "r", "l", "w", "v"]
+        sound_counts = {}
+        for w in weak_words:
+            for pattern in sound_patterns:
+                if w.startswith(pattern):
+                    sound_counts[pattern] = sound_counts.get(pattern, 0) + 1
+                    break
+        sorted_weak_sounds = sorted(sound_counts.items(), key=lambda x: x[1], reverse=True)
+        weak_sounds = [sound for sound, count in sorted_weak_sounds if count >= 1][:3]
+        
+    # 2. Call the generator service
+    from app.services.llm_service import generate_custom_exercises
+    contents = generate_custom_exercises(
+        language=payload.language,
+        difficulty=payload.difficulty,
+        exercise_type=payload.exercise_type,
+        weak_sounds=weak_sounds
+    )
+    
+    # 3. Save to database for this user
+    from app.models.exercise_model import Exercise
+    saved_exercises = []
+    for content in contents:
+        db_ex = Exercise(
+            user_id=current_user.id,
+            language=payload.language,
+            difficulty=payload.difficulty,
+            content=content
+        )
+        db.add(db_ex)
+        saved_exercises.append(content)
+        
+    db.commit()
+    return {
+        "status": "success",
+        "exercises": saved_exercises
     }
 
 # Mount frontend static files LAST so it doesn't intercept API routes
