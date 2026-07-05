@@ -15,7 +15,8 @@ from app.services.analysis_service import (
     calculate_accuracy,
     calculate_fluency,
     calculate_real_fluency,
-    generate_feedback
+    generate_feedback,
+    detect_emotion_and_confidence
 )
 from app.utils.language_map import LANGUAGE_MAP
 from app.database import engine, Base, get_db, SessionLocal
@@ -162,6 +163,9 @@ async def analyze_audio(
         speech_rate = fluency_data["speech_rate"]
         pause_count = fluency_data["pause_count"]
 
+        # Emotion & Confidence Detection (acoustic + text analysis)
+        emotion_data = detect_emotion_and_confidence(file_path, transcription, language_code)
+
         feedback = generate_feedback(expected_text, transcription, accuracy, language_code, whisper_result=whisper_result)
 
         # Save to database
@@ -176,7 +180,11 @@ async def analyze_audio(
             speech_rate=speech_rate,
             pause_count=pause_count,
             feedback=feedback,
-            audio_file_path=file_path
+            audio_file_path=file_path,
+            confidence_score=emotion_data["confidence_score"],
+            nervousness_score=emotion_data["nervousness_score"],
+            hesitation_score=emotion_data["hesitation_score"],
+            emotion=emotion_data["emotion"]
         )
         try:
             db.add(db_session)
