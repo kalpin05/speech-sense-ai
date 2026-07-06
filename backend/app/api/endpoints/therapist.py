@@ -102,6 +102,10 @@ def get_patient_sessions(
             "speech_rate": s.speech_rate,
             "pause_count": s.pause_count,
             "feedback": s.feedback,
+            "confidence_score": s.confidence_score,
+            "nervousness_score": s.nervousness_score,
+            "hesitation_score": s.hesitation_score,
+            "emotion": s.emotion,
             "created_at": s.created_at
         })
         
