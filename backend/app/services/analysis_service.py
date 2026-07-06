@@ -1,6 +1,10 @@
 import Levenshtein
 import unicodedata
+import logging
+import json
 from app.utils.feedback_translations import FEEDBACK_TRANSLATIONS
+
+log = logging.getLogger(__name__)
 
 
 def normalize_text(text: str) -> str:
@@ -391,10 +395,229 @@ def generate_feedback(expected: str, actual: str, accuracy: float, language_code
         incorrect_words = pron_analysis["incorrect_words"]
         detailed_analysis = pron_analysis["detailed_analysis"]
 
-    import json
     return json.dumps({
         "message": translations["excellent"] if accuracy > 90 else translations["good"] if accuracy > 75 else translations["close"].format(expected=expected) if accuracy > 50 else translations["poor"].format(expected=expected),
         "diff": diff,
         "incorrect_words": incorrect_words,
         "detailed_analysis": detailed_analysis
     })
+
+
+def calculate_acoustic_features(file_path: str) -> dict:
+    """Extract RMS energy and F0 pitch stats from audio file using librosa."""
+    try:
+        import librosa
+        import numpy as np
+
+        y, sr = librosa.load(file_path, sr=None)
+        if len(y) < 100:
+            return {"mean_energy": 0.0, "std_energy": 0.0, "mean_pitch": 0.0, "std_pitch": 0.0}
+
+        # 1. Volume/Energy (RMS)
+        rms = librosa.feature.rms(y=y)
+        mean_energy = float(np.mean(rms))
+        std_energy = float(np.std(rms))
+
+        # 2. Fundamental Frequency (F0 Pitch tracking using Yin)
+        mean_pitch = 0.0
+        std_pitch = 0.0
+        try:
+            pitches = librosa.yin(y, fmin=60, fmax=400, sr=sr)
+            voiced_pitches = pitches[~np.isnan(pitches)]
+            voiced_pitches = voiced_pitches[voiced_pitches > 0]
+            if len(voiced_pitches) > 0:
+                mean_pitch = float(np.mean(voiced_pitches))
+                std_pitch = float(np.std(voiced_pitches))
+        except Exception as e:
+            log.warning(f"Pitch detection failed: {e}. Falling back.")
+
+        return {
+            "mean_energy": mean_energy,
+            "std_energy": std_energy,
+            "mean_pitch": mean_pitch,
+            "std_pitch": std_pitch
+        }
+    except Exception as e:
+        log.error(f"Failed to calculate acoustic features: {e}")
+        return {"mean_energy": 0.0, "std_energy": 0.0, "mean_pitch": 0.0, "std_pitch": 0.0}
+
+
+# Language-specific speech filler words
+FILLER_WORDS = {
+    "english": ["um", "uh", "ah", "eh", "like", "well", "er", "you know"],
+    "spanish": ["este", "bueno", "eh", "o sea", "pues", "sabes"],
+    "hindi": ["मतलब", "अच्छा", "यानी", "जैसे कि"]
+}
+
+def detect_emotion_and_confidence(file_path: str, transcription: str, language_code: str = "en") -> dict:
+    """Analyze acoustics and text transcript to estimate emotion, confidence, hesitation, and nervousness."""
+    import os
+    import json
+    
+    # Find active language
+    lang = "english"
+    if language_code == "es":
+        lang = "spanish"
+    elif language_code == "hi":
+        lang = "hindi"
+
+    # 1. Textual Analysis: Count fillers
+    clean_trans = transcription.lower().strip()
+    words = clean_trans.split()
+    word_count = len(words)
+    
+    fillers = FILLER_WORDS.get(lang, FILLER_WORDS["english"])
+    filler_count = 0
+    for f in fillers:
+        filler_count += clean_trans.count(f)
+
+    # 2. Audio features
+    acoustics = calculate_acoustic_features(file_path)
+    mean_energy = acoustics["mean_energy"]
+    std_energy = acoustics["std_energy"]
+    mean_pitch = acoustics["mean_pitch"]
+    std_pitch = acoustics["std_pitch"]
+
+    # 3. Fetch pause and silence metrics from fluency
+    fluency_data = calculate_real_fluency(file_path, transcription, language_code)
+    pause_count = fluency_data.get("pause_count", 0)
+    
+    # Calculate silence ratio
+    try:
+        import librosa
+        y, sr = librosa.load(file_path, sr=None)
+        total_duration = len(y) / sr
+        intervals = librosa.effects.split(y, top_db=25)
+        speaking_duration = sum((end - start) / sr for start, end in intervals)
+        silence_ratio = (total_duration - speaking_duration) / total_duration if total_duration > 0 else 0.0
+    except Exception:
+        silence_ratio = 0.2
+
+    # 4. Compute Scores
+    # A. Hesitation Score
+    hesitation_pct = (pause_count / max(1.0, word_count)) * 200.0 + (filler_count * 15.0)
+    hesitation_score = int(max(0, min(100, hesitation_pct)))
+
+    # B. Nervousness Score
+    speech_rate = fluency_data.get("speech_rate", 120.0)
+    rate_dev = 0.0
+    if speech_rate < 100:
+        rate_dev = (100.0 - speech_rate) * 0.8
+    elif speech_rate > 160:
+        rate_dev = (speech_rate - 160.0) * 0.8
+    
+    pitch_jitter_penalty = 0.0
+    if mean_pitch > 0:
+        pitch_cv = std_pitch / mean_pitch
+        if pitch_cv > 0.3:
+            pitch_jitter_penalty = min(30.0, (pitch_cv - 0.3) * 100.0)
+        elif pitch_cv < 0.05:
+            pitch_jitter_penalty = 15.0
+
+    nervousness_pct = rate_dev + (silence_ratio * 40.0) + pitch_jitter_penalty
+    nervousness_score = int(max(0, min(100, nervousness_pct)))
+
+    # C. Confidence Score
+    conf = 100.0 - (hesitation_score * 0.4) - (nervousness_score * 0.4) - (silence_ratio * 20.0)
+    if std_energy > 0 and mean_energy > 0:
+        energy_cv = std_energy / mean_energy
+        if energy_cv < 0.25:
+            conf += 5
+    confidence_score = int(max(0, min(100, conf)))
+
+    # 5. Classify Dominant Emotion
+    dominant_emotion = "neutral"
+
+    # Check for OpenAI LLM if key is present
+    api_key = os.getenv("OPENAI_API_KEY")
+    if api_key:
+        try:
+            import urllib.request
+            prompt = f"""
+You are an advanced vocal analysis AI.
+Analyze this speech sample data:
+- Transcription: "{transcription}"
+- Language: "{lang}"
+- Acoustic pitch mean: {mean_pitch:.1f} Hz (std dev: {std_pitch:.1f})
+- Acoustic volume/energy mean: {mean_energy:.4f} (std dev: {std_energy:.4f})
+- Silence ratio: {silence_ratio:.2f}
+- Speaking rate: {speech_rate:.1f} WPM
+- Pause count: {pause_count}
+- Filler words count: {filler_count}
+
+Output a single JSON object containing:
+- "confidence_score": integer 0-100
+- "nervousness_score": integer 0-100
+- "hesitation_score": integer 0-100
+- "emotion": one of "happy", "anxious", "sad", "angry", "neutral"
+
+Response format: ONLY valid JSON, no markdown codeblocks, no extra text.
+"""
+            url = "https://api.openai.com/v1/chat/completions"
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}"
+            }
+            payload = {
+                "model": "gpt-4o-mini",
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.3
+            }
+            req = urllib.request.Request(url, data=json.dumps(payload).encode('utf-8'), headers=headers, method='POST')
+            with urllib.request.urlopen(req, timeout=10) as response:
+                res_data = json.loads(response.read().decode('utf-8'))
+                content = res_data["choices"][0]["message"]["content"].strip()
+                if content.startswith("```"):
+                    content = content.replace("```json", "").replace("```", "").strip()
+                parsed = json.loads(content)
+                return {
+                    "confidence_score": int(parsed.get("confidence_score", confidence_score)),
+                    "nervousness_score": int(parsed.get("nervousness_score", nervousness_score)),
+                    "hesitation_score": int(parsed.get("hesitation_score", hesitation_score)),
+                    "emotion": str(parsed.get("emotion", "neutral")).lower()
+                }
+        except Exception as e:
+            log.error(f"Failed to analyze emotion/confidence via OpenAI: {e}. Falling back to rule-based.")
+
+    # Rule-based fallback classifier
+    positive_words = ["happy", "good", "great", "excellent", "nice", "love", "joy", "amazing", "bueno", "feliz", "alegre", "gracias", "सुंदर", "अच्छा", "धन्यवाद", "सफलता"]
+    negative_words = ["sad", "bad", "angry", "hate", "sorry", "fear", "scared", "pain", "mal", "triste", "miedo", "enojado", "दुख", "खराब", "डर", "गुस्सा"]
+    
+    pos_count = sum(clean_trans.count(w) for w in positive_words)
+    neg_count = sum(clean_trans.count(w) for w in negative_words)
+
+    if mean_pitch > 0:
+        pitch_cv = std_pitch / mean_pitch
+    else:
+        pitch_cv = 0.15
+
+    if pos_count > neg_count:
+        if pitch_cv > 0.22 or mean_energy > 0.04:
+            dominant_emotion = "happy"
+        else:
+            dominant_emotion = "neutral"
+    elif neg_count > pos_count:
+        if nervousness_score > 50 or hesitation_score > 55:
+            dominant_emotion = "anxious"
+        elif pitch_cv < 0.08 and mean_energy < 0.015:
+            dominant_emotion = "sad"
+        else:
+            dominant_emotion = "angry"
+    else:
+        if nervousness_score > 60 or (pitch_cv > 0.25 and hesitation_score > 40):
+            dominant_emotion = "anxious"
+        elif pitch_cv > 0.22 and mean_energy > 0.03:
+            dominant_emotion = "happy"
+        elif pitch_cv < 0.08 and mean_energy < 0.015:
+            dominant_emotion = "sad"
+        elif pitch_cv < 0.06 and mean_energy > 0.04:
+            dominant_emotion = "angry"
+        else:
+            dominant_emotion = "neutral"
+
+    return {
+        "confidence_score": confidence_score,
+        "nervousness_score": nervousness_score,
+        "hesitation_score": hesitation_score,
+        "emotion": dominant_emotion
+    }
