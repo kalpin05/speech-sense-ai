@@ -148,9 +148,27 @@ def get_user_analytics(current_user: User = Depends(get_current_user), db: Sessi
     
     avg_score = 0
     best_score = 0
+    avg_confidence = 0
+    avg_nervousness = 0
+    avg_hesitation = 0
+    emotion_breakdown = {}
+    
     if total_attempts > 0:
         avg_score = int(sum(s.accuracy_score for s in sessions) / total_attempts)
         best_score = int(max(s.accuracy_score for s in sessions))
+        
+        conf_vals = [s.confidence_score for s in sessions if s.confidence_score is not None]
+        nerv_vals = [s.nervousness_score for s in sessions if s.nervousness_score is not None]
+        hes_vals = [s.hesitation_score for s in sessions if s.hesitation_score is not None]
+        
+        avg_confidence = int(sum(conf_vals) / len(conf_vals)) if conf_vals else 0
+        avg_nervousness = int(sum(nerv_vals) / len(nerv_vals)) if nerv_vals else 0
+        avg_hesitation = int(sum(hes_vals) / len(hes_vals)) if hes_vals else 0
+        
+        for s in sessions:
+            if s.emotion:
+                emotion_clean = s.emotion.lower()
+                emotion_breakdown[emotion_clean] = emotion_breakdown.get(emotion_clean, 0) + 1
         
     from app.services.gamification_service import calculate_streak
     streak = calculate_streak(sessions)
@@ -158,6 +176,11 @@ def get_user_analytics(current_user: User = Depends(get_current_user), db: Sessi
     session_data = [
         {
             "accuracy_score": s.accuracy_score,
+            "fluency_score_val": s.fluency_score_val,
+            "confidence_score": s.confidence_score,
+            "nervousness_score": s.nervousness_score,
+            "hesitation_score": s.hesitation_score,
+            "emotion": s.emotion,
             "created_at": s.created_at.isoformat()
         }
         for s in sessions
@@ -168,6 +191,10 @@ def get_user_analytics(current_user: User = Depends(get_current_user), db: Sessi
         "average_score": avg_score,
         "best_score": best_score,
         "streak": streak,
+        "average_confidence": avg_confidence,
+        "average_nervousness": avg_nervousness,
+        "average_hesitation": avg_hesitation,
+        "emotion_breakdown": emotion_breakdown,
         "sessions": session_data
     }
 
