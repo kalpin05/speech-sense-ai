@@ -19,4 +19,8 @@ class TherapySession(Base):
     pause_count = Column(Integer, nullable=True)
     feedback = Column(Text, nullable=False)
     audio_file_path = Column(String(500))
+    confidence_score = Column(Float, nullable=True)
+    nervousness_score = Column(Float, nullable=True)
+    hesitation_score = Column(Float, nullable=True)
+    emotion = Column(String(50), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
