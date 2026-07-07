@@ -331,6 +331,11 @@ def on_startup():
         seed_exercises(db)
     finally:
         db.close()
+    
+    # Preload the Whisper model in a background thread to prevent blocking port checks on startup
+    import threading
+    from app.services.whisper_service import preload_model
+    threading.Thread(target=preload_model, daemon=True).start()
 
 @app.get("/exercises")
 def get_exercises(
