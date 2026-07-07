@@ -11,7 +11,7 @@ def _get_model():
             if _model is None:
                 try:
                     import whisper
-                    _model = whisper.load_model("turbo")
+                    _model = whisper.load_model("base")
                 except Exception as e:
                     raise RuntimeError("Failed to load transcription model") from e
     return _model
