@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from fastapi import FastAPI, UploadFile, File, Form, Depends, HTTPException, BackgroundTasks, Query
+from fastapi import FastAPI, UploadFile, File, Form, Depends, HTTPException, BackgroundTasks, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.concurrency import run_in_threadpool
 import asyncio
@@ -30,7 +30,13 @@ from app.services.auth_service import get_current_user
 from app.config import ALLOW_CREATE_ALL
 
 # Limit to 1 concurrent Whisper transcription to prevent Out-Of-Memory crashes
-whisper_semaphore = asyncio.Semaphore(1)
+whisper_semaphore = None
+
+def get_whisper_semaphore():
+    global whisper_semaphore
+    if whisper_semaphore is None:
+        whisper_semaphore = asyncio.Semaphore(1)
+    return whisper_semaphore
 
 # Only initialize DB schema when explicitly allowed (safer for production)
 if ALLOW_CREATE_ALL:
@@ -146,7 +152,7 @@ async def analyze_audio(
         # Controlled transcription using threadpool to prevent freezing the event loop
         # and using Semaphore to prevent Out-Of-Memory crashes
         try:
-            async with whisper_semaphore:
+            async with get_whisper_semaphore():
                 whisper_result = await run_in_threadpool(transcribe_audio_detailed, file_path, language_code)
                 transcription = whisper_result.get("text", "").strip()
         except Exception as e:
@@ -520,6 +526,151 @@ def generate_exercises_endpoint(
         "status": "success",
         "exercises": saved_exercises
     }
+
+@app.websocket("/ws/stream")
+async def websocket_stream(websocket: WebSocket, db: Session = Depends(get_db)):
+    await websocket.accept()
+    log.info("WebSocket connection established")
+    
+    import tempfile
+    import wave
+    import json
+    import struct
+    import difflib
+    from app.services.analysis_service import normalize_text
+    
+    # 1. Read configuration message
+    try:
+        config_data = await websocket.receive_json()
+        expected_text = config_data.get("expected_text", "").strip()
+        language = config_data.get("language", "English").strip()
+        
+        # Verify language mapping
+        if language.lower() not in LANGUAGE_MAP:
+            await websocket.send_json({"type": "error", "message": "Unsupported language"})
+            await websocket.close()
+            return
+            
+        language_code = LANGUAGE_MAP[language.lower()]
+    except Exception as e:
+        log.error(f"WebSocket initialization failed: {e}")
+        await websocket.send_json({"type": "error", "message": "Invalid initialization configuration"})
+        await websocket.close()
+        return
+
+    # Accumulator for raw PCM audio chunks
+    audio_buffer = bytearray()
+    
+    # We expect 16kHz mono 16-bit PCM chunks (2 bytes per sample)
+    silent_duration_samples = 0
+    max_silence_samples = 16000 * 0.8 # 800ms of silence
+    is_speaking = False
+    
+    async def process_and_send(buf: bytearray):
+        if len(buf) < 4000: # at least 125ms
+            return
+        buffer_duration_sec = len(buf) / (16000 * 2)
+        log.info(f"Processing real-time segment: {buffer_duration_sec:.1f}s")
+        
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+            wav_name = tmp.name
+            
+        try:
+            with wave.open(wav_name, "wb") as wav_file:
+                wav_file.setnchannels(1)
+                wav_file.setsampwidth(2)
+                wav_file.setframerate(16000)
+                wav_file.writeframes(buf)
+                
+            async with get_whisper_semaphore():
+                whisper_result = await run_in_threadpool(transcribe_audio_detailed, wav_name, language_code)
+                transcription = whisper_result.get("text", "").strip()
+            
+            log.info(f"Real-time segment transcription result: '{transcription}'")
+            if transcription:
+                accuracy = calculate_accuracy(expected_text, transcription)
+                
+                expected_normalized = normalize_text(expected_text).split()
+                trans_normalized = normalize_text(transcription).split()
+                
+                matcher = difflib.SequenceMatcher(None, expected_normalized, trans_normalized)
+                alignment_result = []
+                
+                for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+                    if tag == 'equal':
+                        for w in expected_normalized[i1:i2]:
+                            alignment_result.append({"word": w, "status": "correct"})
+                    elif tag == 'replace' or tag == 'delete':
+                        for w in expected_normalized[i1:i2]:
+                            alignment_result.append({"word": w, "status": "missed"})
+                            
+                await websocket.send_json({
+                    "type": "feedback",
+                    "transcription": transcription,
+                    "accuracy": accuracy,
+                    "words": alignment_result
+                })
+        except Exception as ex:
+            log.error(f"Error processing streaming segment: {ex}")
+        finally:
+            try:
+                os.remove(wav_name)
+            except Exception:
+                pass
+
+    try:
+        while True:
+            # Receive incoming message (binary PCM audio or text command)
+            message = await websocket.receive()
+            if "bytes" in message:
+                chunk = message["bytes"]
+                audio_buffer.extend(chunk)
+                
+                # Volume RMS check
+                sample_count = len(chunk) // 2
+                if sample_count > 0:
+                    samples = struct.unpack(f"<{sample_count}h", chunk)
+                    rms = (sum(s**2 for s in samples) / sample_count) ** 0.5
+                    
+                    if rms < 250:
+                        silent_duration_samples += sample_count
+                    else:
+                        silent_duration_samples = 0
+                        is_speaking = True
+                        
+                buffer_duration_sec = len(audio_buffer) / (16000 * 2)
+                
+                should_process = False
+                if is_speaking and silent_duration_samples >= max_silence_samples and buffer_duration_sec > 1.2:
+                    should_process = True
+                elif buffer_duration_sec >= 8.0:
+                    should_process = True
+                    
+                if should_process:
+                    await process_and_send(audio_buffer)
+                    audio_buffer = bytearray()
+                    is_speaking = False
+                    silent_duration_samples = 0
+            
+            elif "text" in message:
+                text_cmd = json.loads(message["text"])
+                if text_cmd.get("type") == "stop":
+                    await process_and_send(audio_buffer)
+                    audio_buffer = bytearray()
+                    break
+
+    except WebSocketDisconnect:
+        log.info("WebSocket disconnected")
+        if len(audio_buffer) > 4000:
+            try:
+                await process_and_send(audio_buffer)
+            except Exception:
+                pass
+    except Exception as e:
+        log.error(f"WebSocket error: {e}")
+    finally:
+        log.info("WebSocket connection cleanup finished")
+
 
 # Mount frontend static files LAST so it doesn't intercept API routes
 app.mount("/", StaticFiles(directory=str(frontend_dir), html=True), name="frontend")
