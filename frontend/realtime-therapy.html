@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Live Speech Room - SpeechAI</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',sans-serif;background:linear-gradient(135deg,#0f172a,#1e293b);color:white;margin-top:60px}
+.container{max-width:900px;margin:auto;padding:25px}
+
+/* NAVBAR */
+nav{position:fixed;top:0;left:0;right:0;height:60px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;background:rgba(15,23,42,0.9);backdrop-filter:blur(10px);border-bottom:1px solid rgba(255,255,255,0.1);z-index:1000}
+.nav-brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:white;font-weight:600;font-size:1.1rem}
+.nav-links{display:flex;gap:20px;list-style:none}
+.nav-links a{text-decoration:none;color:#8fa5bc;font-size:0.9rem;transition:color 0.2s}
+.nav-links a:hover,.nav-links a.active{color:#38bdf8}
+.nav-right{display:flex;gap:15px;align-items:center}
+.btn-logout{padding:8px 16px;background:transparent;border:1px solid #38bdf8;color:#38bdf8;border-radius:6px;cursor:pointer;font-size:0.85rem;transition:all 0.2s}
+.btn-logout:hover{background:#38bdf8;color:#0f172a}
+
+/* PANEL */
+.panel{background:rgba(255,255,255,0.06);padding:30px;border-radius:24px;backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.1);margin-bottom:25px}
+h1{font-weight:700;margin-bottom:15px;background:linear-gradient(90deg,#38bdf8,#a855f7);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+p.subtitle{color:#94a3b8;font-size:0.95rem;margin-bottom:25px}
+
+/* SELECTION */
+.selector-box{display:grid;grid-template-columns:1fr auto;gap:15px;margin-bottom:25px}
+select{background:#1e293b;border:1px solid rgba(255,255,255,0.1);color:white;padding:12px 18px;border-radius:10px;font-size:0.95rem;outline:none}
+.btn-primary{padding:12px 24px;background:linear-gradient(135deg,#38bdf8,#22c55e);color:black;border:none;border-radius:10px;font-weight:600;cursor:pointer;transition:.2s}
+.btn-primary:hover{transform:scale(1.02);box-shadow:0 0 15px rgba(56,189,248,0.4)}
+
+/* EXPECTED TEXT DISPLAY */
+.text-display-card{background:rgba(0,0,0,0.2);padding:25px;border-radius:16px;margin-bottom:25px;border:1px solid rgba(255,255,255,0.05);min-height:100px}
+.expected-label{font-size:0.75rem;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px}
+.expected-text-box{font-size:1.4rem;line-height:1.7;color:#475569;font-weight:600;display:flex;flex-wrap:wrap;gap:8px}
+.word-span{transition:color 0.3s, transform 0.2s}
+.word-span.spoken-correct{color:#22c55e;text-shadow:0 0 10px rgba(34,197,94,0.3)}
+.word-span.spoken-missed{color:#ef4444;text-shadow:0 0 10px rgba(239,68,68,0.2)}
+.word-span.unspoken{color:#94a3b8}
+
+/* INTERMEDIATE TRANSCRIPTION */
+.transcription-card{background:rgba(255,255,255,0.03);padding:20px;border-radius:16px;margin-bottom:25px;border:1px solid rgba(255,255,255,0.03)}
+.transcription-label{font-size:0.75rem;color:#a855f7;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;font-weight:600}
+.transcription-text{font-size:1.1rem;color:#cbd5e1;font-style:italic;min-height:30px}
+
+/* WAVE VISUALIZER */
+.visualizer-container{display:flex;flex-direction:column;align-items:center;margin-bottom:25px}
+canvas{width:100%;height:100px;background:rgba(15,23,42,0.4);border-radius:16px;border:1px solid rgba(255,255,255,0.05)}
+
+/* CONTROLS */
+.controls{display:flex;justify-content:center;gap:20px;align-items:center}
+.btn-control{padding:14px 28px;border-radius:50px;border:none;font-weight:600;font-size:1rem;cursor:pointer;display:flex;align-items:center;gap:10px;transition:all 0.2s}
+.btn-record{background:#ef4444;color:white}
+.btn-record:hover{background:#dc2626;transform:scale(1.05);box-shadow:0 0 20px rgba(239,68,68,0.4)}
+.btn-stop{background:#64748b;color:white;display:none}
+.btn-stop:hover{background:#475569;transform:scale(1.05)}
+
+/* STATUS */
+.status-pill{padding:6px 14px;background:rgba(255,255,255,0.08);border-radius:20px;font-size:0.8rem;display:inline-flex;align-items:center;gap:8px;margin-bottom:15px}
+.status-dot{width:8px;height:8px;border-radius:50%;background:#64748b}
+.status-dot.active{background:#ef4444;box-shadow:0 0 8px #ef4444;animation:pulse 1s infinite}
+@keyframes pulse{0%{opacity:0.3}50%{opacity:1}100%{opacity:0.3}}
+
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="dashboard.html" class="nav-brand">🎯 SpeechAI</a>
+  <div class="nav-links">
+    <a href="dashboard.html">Dashboard</a>
+    <a href="exercises.html">Exercises</a>
+    <a href="achievement-progress.html">Progress</a>
+    <a href="settings.html">Settings</a>
+  </div>
+  <div class="nav-right">
+    <button class="btn-logout" onclick="logout()">Logout</button>
+  </div>
+</nav>
+
+<div class="container">
+  <div class="panel">
+    <div class="status-pill">
+      <div class="status-dot" id="statusDot"></div>
+      <span id="statusText">Disconnected</span>
+    </div>
+    
+    <h1>⚡ Live Speech practice Room</h1>
+    <p class="subtitle">Select an exercise, start the session, and speak. See dynamic word highlighting and accuracy feedback in real-time.</p>
+    
+    <div class="selector-box">
+      <select id="exerciseSelect">
+        <option value="">-- Choose a Practice Sentence --</option>
+      </select>
+      <button class="btn-primary" onclick="loadSelectedExercise()">Load</button>
+    </div>
+    
+    <div class="text-display-card">
+      <div class="expected-label">Read this sentence aloud:</div>
+      <div class="expected-text-box" id="expectedTextBox">
+        <span style="color:#64748b; font-style:italic;">Please load an exercise to start...</span>
+      </div>
+    </div>
+    
+    <div class="transcription-card">
+      <div class="transcription-label">Heard Live:</div>
+      <div class="transcription-text" id="liveTranscriptionText">Waiting for speech input...</div>
+    </div>
+    
+    <div class="visualizer-container">
+      <canvas id="waveCanvas"></canvas>
+    </div>
+    
+    <div class="controls">
+      <button class="btn-control btn-record" id="btnRecord" onclick="startRealTimeSession()">
+        🔴 Start Live Session
+      </button>
+      <button class="btn-control btn-stop" id="btnStop" onclick="stopRealTimeSession()">
+        ⏹️ End Session
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+const token = localStorage.getItem('speechai_token');
+if (!token) {
+    window.location.href = 'index.html';
+}
+
+let socket = null;
+let audioCtx = null;
+let processor = null;
+let micStream = null;
+let currentLanguage = 'English';
+let loadedSentence = '';
+let isRecording = false;
+
+// Visualizer parameters
+let animationId = null;
+let analyserNode = null;
+const canvas = document.getElementById('waveCanvas');
+const canvasCtx = canvas.getContext('2d');
+
+// Load exercises dropdown list on startup
+async function loadExercisesList() {
+    try {
+        const res = await fetch('/exercises?language=english', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+            const data = await res.json();
+            const select = document.getElementById('exerciseSelect');
+            
+            // Populate standard exercises
+            data.exercises.forEach(ex => {
+                const opt = document.createElement('option');
+                opt.value = ex;
+                opt.innerText = ex.length > 60 ? ex.substring(0, 60) + '...' : ex;
+                select.appendChild(opt);
+            });
+            
+            // Populate custom exercises
+            if (data.custom_exercises && data.custom_exercises.length > 0) {
+                const group = document.createElement('optgroup');
+                group.label = "Your Generated AI Exercises";
+                data.custom_exercises.forEach(ex => {
+                    const opt = document.createElement('option');
+                    opt.value = ex;
+                    opt.innerText = ex.length > 60 ? ex.substring(0, 60) + '...' : ex;
+                    group.appendChild(opt);
+                });
+                select.appendChild(group);
+            }
+        }
+    } catch(err) {
+        console.error('Failed to load exercises list', err);
+    }
+}
+
+function loadSelectedExercise() {
+    const text = document.getElementById('exerciseSelect').value;
+    if (!text) {
+        alert('Please choose a practice sentence first');
+        return;
+    }
+    loadedSentence = text;
+    
+    // Display individual word spans for highlighting
+    const box = document.getElementById('expectedTextBox');
+    box.innerHTML = '';
+    
+    const words = text.split(/\s+/);
+    words.forEach((w, idx) => {
+        const span = document.createElement('span');
+        span.className = 'word-span unspoken';
+        span.id = `word-${idx}`;
+        span.innerText = w;
+        box.appendChild(span);
+    });
+    
+    document.getElementById('liveTranscriptionText').innerText = "Ready. Click 'Start Live Session' to practice.";
+}
+
+async function startRealTimeSession() {
+    if (!loadedSentence) {
+        alert('Please load an exercise sentence before starting.');
+        return;
+    }
+    
+    isRecording = true;
+    document.getElementById('btnRecord').style.display = 'none';
+    document.getElementById('btnStop').style.display = 'block';
+    
+    // Connect WebSocket
+    const wsProto = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    const wsUrl = `${wsProto}://${window.location.host}/ws/stream`;
+    socket = new WebSocket(wsUrl);
+    
+    socket.onopen = function() {
+        console.log("WebSocket connected");
+        document.getElementById('statusDot').className = 'status-dot active';
+        document.getElementById('statusText').innerText = 'Live Streaming Active';
+        
+        // Send initial connection setup
+        socket.send(JSON.stringify({
+            expected_text: loadedSentence,
+            language: currentLanguage,
+            access_token: token
+        }));
+        
+        // Start microphone processing
+        setupMicrophone();
+    };
+    
+    socket.onmessage = function(event) {
+        const data = JSON.parse(event.data);
+        if (data.type === 'feedback') {
+            document.getElementById('liveTranscriptionText').innerText = data.transcription;
+            highlightWords(data.words);
+        } else if (data.type === 'error') {
+            alert(`Server error: ${data.message}`);
+            stopRealTimeSession();
+        }
+    };
+    
+    socket.onclose = function() {
+        console.log("WebSocket closed");
+        cleanupMicrophone();
+    };
+    
+    socket.onerror = function(err) {
+        console.error("WebSocket error", err);
+    };
+}
+
+async function setupMicrophone() {
+    try {
+        micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        
+        // Resample directly to 16000Hz using modern AudioContext constructor configuration
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+        const source = audioCtx.createMediaStreamSource(micStream);
+        
+        // Setup visualizer analyser node
+        analyserNode = audioCtx.createAnalyser();
+        analyserNode.fftSize = 256;
+        source.connect(analyserNode);
+        
+        // Setup PCM script processor node (buffer size 4096 = 256ms chunk duration)
+        processor = audioCtx.createScriptProcessor(4096, 1, 1);
+        source.connect(processor);
+        processor.connect(audioCtx.destination);
+        
+        processor.onaudioprocess = function(e) {
+            if (!isRecording) return;
+            
+            const channelData = e.inputBuffer.getChannelData(0);
+            const pcmBuffer = new Int16Array(channelData.length);
+            
+            // Convert Float32 [-1.0, 1.0] to Int16 signed short PCM
+            for (let i = 0; i < channelData.length; i++) {
+                const s = Math.max(-1, Math.min(1, channelData[i]));
+                pcmBuffer[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+            }
+            
+            // Stream binary chunk
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.send(pcmBuffer.buffer);
+            }
+        };
+        
+        // Render visual wave
+        drawWave();
+    } catch(err) {
+        console.error("Failed to access mic", err);
+        alert("Microphone access is required for real-time speech evaluation.");
+        stopRealTimeSession();
+    }
+}
+
+function highlightWords(alignmentWords) {
+    // Reset all words
+    const text = loadedSentence;
+    const words = text.split(/\s+/);
+    
+    // Simple index alignment matching
+    words.forEach((_, idx) => {
+        const el = document.getElementById(`word-${idx}`);
+        if (el) el.className = 'word-span unspoken';
+    });
+    
+    // Walk the alignment returned and mark matched items
+    // Since speech is spoken chronologically, we match alignment words to expected words
+    alignmentWords.forEach((alignObj, idx) => {
+        const el = document.getElementById(`word-${idx}`);
+        if (el) {
+            if (alignObj.status === 'correct') {
+                el.className = 'word-span spoken-correct';
+            } else {
+                el.className = 'word-span spoken-missed';
+            }
+        }
+    });
+}
+
+function drawWave() {
+    if (!analyserNode) return;
+    
+    animationId = requestAnimationFrame(drawWave);
+    
+    const bufferLength = analyserNode.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+    analyserNode.getByteTimeDomainData(dataArray);
+    
+    canvasCtx.fillStyle = '#0f172a';
+    canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    canvasCtx.lineWidth = 2;
+    canvasCtx.strokeStyle = '#38bdf8';
+    canvasCtx.beginPath();
+    
+    const sliceWidth = canvas.width * 1.0 / bufferLength;
+    let x = 0;
+    
+    for (let i = 0; i < bufferLength; i++) {
+        const v = dataArray[i] / 128.0;
+        const y = v * canvas.height / 2;
+        
+        if (i === 0) {
+            canvasCtx.moveTo(x, y);
+        } else {
+            canvasCtx.lineTo(x, y);
+        }
+        
+        x += sliceWidth;
+    }
+    
+    canvasCtx.lineTo(canvas.width, canvas.height / 2);
+    canvasCtx.stroke();
+}
+
+function cleanupMicrophone() {
+    isRecording = false;
+    if (animationId) {
+        cancelAnimationFrame(animationId);
+    }
+    if (processor) {
+        processor.disconnect();
+        processor = null;
+    }
+    if (audioCtx) {
+        audioCtx.close();
+        audioCtx = null;
+    }
+    if (micStream) {
+        micStream.getTracks().forEach(track => track.stop());
+        micStream = null;
+    }
+    
+    // Clear wave canvas
+    canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
+}
+
+function stopRealTimeSession() {
+    isRecording = false;
+    document.getElementById('btnRecord').style.display = 'block';
+    document.getElementById('btnStop').style.display = 'none';
+    
+    document.getElementById('statusDot').className = 'status-dot';
+    document.getElementById('statusText').innerText = 'Disconnected';
+    
+    if (socket) {
+        if (socket.readyState === WebSocket.OPEN) {
+            // Send stop text message to signal exit
+            socket.send(JSON.stringify({ type: "stop" }));
+        }
+        socket.close();
+        socket = null;
+    }
+    cleanupMicrophone();
+}
+
+function logout() {
+    if(confirm('Are you sure you want to logout?')) {
+        localStorage.removeItem('username');
+        localStorage.removeItem('speechai_token');
+        window.location.href = 'index.html';
+    }
+}
+
+// Initializations
+loadExercisesList();
+</script>
+</body>
+</html>
