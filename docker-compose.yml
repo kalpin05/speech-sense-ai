@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: speech-sense-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: speech-ai
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: always
+
+  web:
+    build: .
+    container_name: speech-sense-web
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: "postgresql://postgres:admin@db:5432/speech-ai"
+      WHISPER_MODEL_NAME: "base"
+      # Inherit OpenAI API Key from host environment if set
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+      MAX_UPLOAD_SIZE: 10485760  # 10MB
+    volumes:
+      - uploads:/app/uploads
+    depends_on:
+      - db
+    restart: always
+
+volumes:
+  pgdata:
+  uploads:
