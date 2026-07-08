@@ -11,3 +11,4 @@ alembic
 librosa
 soundfile
 scipy
+websockets
