@@ -117,6 +117,24 @@ async def analyze_audio(
     if not ext:
         raise HTTPException(status_code=400, detail="Invalid or unsupported file format")
 
+    # Validate MIME content-type
+    allowed_mimes = {
+        "audio/wav", "audio/wave", "audio/x-wav",
+        "audio/mpeg", "audio/mp3",
+        "audio/m4a", "audio/x-m4a",
+        "audio/webm", "video/webm",
+        "audio/ogg", "audio/x-ogg",
+        "audio/mp4", "video/mp4",
+        "audio/3gpp", "audio/3gpp2",
+        "audio/aac", "audio/x-aac"
+    }
+    mime_type = file.content_type.split(";")[0].strip().lower()
+    if not mime_type or mime_type not in allowed_mimes:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported media type: {file.content_type}. Only standard audio formats are allowed."
+        )
+
     # Build a safe unique filename
     safe_name = f"{uuid.uuid4().hex}{ext}"
     file_path = str(UPLOAD_FOLDER / safe_name)
