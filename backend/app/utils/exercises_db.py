@@ -18,30 +18,32 @@ EXERCISES_DB = {
     },
     "hindi": {
         "beginner": [
+            "नमस्ते, आप कैसे हैं?",
             "मेरा नाम राहुल है और मैं दिल्ली में रहता हूँ।",
-            "नमस्ते, आप कैसे हैं?"
+            "आज का दिन बहुत सुंदर है।"
         ],
         "intermediate": [
-            "मुझे भारतीय भोजन बहुत पसंद है।",
-            "ज्ञान सबसे बड़ा धन है।"
+            "ज्ञान सबसे बड़ा धन है और इसे कोई चुरा नहीं सकता।",
+            "मुझे भारतीय भोजन और मसालेदार व्यंजन बहुत पसंद हैं।"
         ],
         "advanced": [
-            "कल बारिश होने की संभावना है।",
-            "वैज्ञानिक अनुसंधान निरंतर प्रगति कर रहा है।"
+            "खड़क सिंह के खड़कने से खड़कती हैं खिड़कियाँ।",
+            "वैज्ञानिक अनुसंधान मानव जाति के कल्याण के लिए आवश्यक है।"
         ]
     },
     "spanish": {
         "beginner": [
             "Hola, ¿cómo estás hoy?",
-            "Buenos días a todos."
+            "Buenos días a todos.",
+            "El perro es de color marrón."
         ],
         "intermediate": [
-            "Me gustaría una cerveza, por favor.",
-            "El aprendizaje de idiomas abre muchas puertas."
+            "El ferrocarril rápido cruza la frontera de España.",
+            "Me gustaría ordenar una taza de café caliente, por favor."
         ],
         "advanced": [
-            "El clima es muy agradable en verano.",
-            "La tecnología avanza a un ritmo sin precedentes."
+            "Tres tristes tigres tragaban trigo en un trigal.",
+            "La tecnología de inteligencia artificial avanza a un ritmo sin precedentes."
         ]
     }
 }
