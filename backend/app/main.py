@@ -324,22 +324,26 @@ def get_optional_current_user(token: Optional[str] = Depends(oauth2_scheme), db:
         return None
 
 def seed_exercises(db: Session):
-    """Seed default exercises into database if empty."""
+    """Seed default exercises into database if empty or missing."""
     from app.models.exercise_model import Exercise
-    exists = db.query(Exercise).filter(Exercise.user_id.is_(None)).first()
-    if exists:
-        return
-        
-    log.info("Seeding standard exercises into database...")
+    
+    log.info("Checking and seeding standard exercises...")
     for language, difficulties in EXERCISES_DB.items():
         for difficulty, contents in difficulties.items():
             for content in contents:
-                db_exercise = Exercise(
-                    language=language,
-                    difficulty=difficulty,
-                    content=content
-                )
-                db.add(db_exercise)
+                exists = db.query(Exercise).filter(
+                    Exercise.language.ilike(language),
+                    Exercise.difficulty.ilike(difficulty),
+                    Exercise.content == content,
+                    Exercise.user_id.is_(None)
+                ).first()
+                if not exists:
+                    db_exercise = Exercise(
+                        language=language,
+                        difficulty=difficulty,
+                        content=content
+                    )
+                    db.add(db_exercise)
     db.commit()
 
 @app.on_event("startup")
