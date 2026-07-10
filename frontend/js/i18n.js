@@ -106,6 +106,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const selected = e.target.value;
             localStorage.setItem("speechai_ui_lang", selected);
             translatePage(selected);
+            window.dispatchEvent(new CustomEvent("uiLanguageChanged", { detail: { language: selected } }));
         });
 
         // Prepend to nav-right before the logout button
