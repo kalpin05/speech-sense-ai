@@ -218,6 +218,40 @@ async def analyze_audio(
             current_user.xp += 10
             current_user.level = (current_user.xp // 100) + 1
             
+            # Update language-specific progress
+            from app.models.language_progress import UserLanguageProgress
+            from datetime import date, timedelta
+            
+            lang_clean = language.lower().strip()
+            prog = db.query(UserLanguageProgress).filter(
+                UserLanguageProgress.user_id == current_user.id,
+                UserLanguageProgress.language == lang_clean
+            ).first()
+            
+            if not prog:
+                prog = UserLanguageProgress(
+                    user_id=current_user.id,
+                    language=lang_clean,
+                    xp=0,
+                    level=1,
+                    streak=0
+                )
+                db.add(prog)
+                
+            prog.xp += 10
+            prog.level = (prog.xp // 100) + 1
+            
+            # Update language-specific streak
+            today = date.today()
+            if prog.last_attempt_date is None:
+                prog.streak = 1
+            elif prog.last_attempt_date == today - timedelta(days=1):
+                prog.streak += 1
+            elif prog.last_attempt_date != today:
+                prog.streak = 1
+            
+            prog.last_attempt_date = today
+            
             from app.services.gamification_service import check_and_unlock_badges
             check_and_unlock_badges(current_user.id, db, accuracy)
             
