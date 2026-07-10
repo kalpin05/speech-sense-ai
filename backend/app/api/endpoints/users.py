@@ -128,22 +128,61 @@ def get_all_therapists(current_user: User = Depends(get_current_user), db: Sessi
     }
 
 @router.get("/me/gamification")
-def get_user_gamification(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Get user's XP, level, progress inside level, and list of unlocked badges."""
+def get_user_gamification(
+    language: str = "english",
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get user's XP, level, progress inside level, and list of unlocked badges for a specific language."""
     from app.models.badge_model import UserBadge
+    from app.models.language_progress import UserLanguageProgress
+
+    lang_clean = language.lower().strip()
+    
+    # Fetch or create language-specific progress record
+    prog = db.query(UserLanguageProgress).filter(
+        UserLanguageProgress.user_id == current_user.id,
+        UserLanguageProgress.language == lang_clean
+    ).first()
+    
+    if not prog:
+        prog = UserLanguageProgress(
+            user_id=current_user.id,
+            language=lang_clean,
+            xp=0,
+            level=1,
+            streak=0
+        )
+        db.add(prog)
+        db.commit()
+        db.refresh(prog)
+        
     badges = db.query(UserBadge).filter(UserBadge.user_id == current_user.id).all()
     badge_list = [b.badge_id for b in badges]
+    
     return {
-        "xp": current_user.xp,
-        "level": current_user.level,
-        "progress_pct": current_user.xp % 100,
-        "badges": badge_list
+        "xp": prog.xp,
+        "level": prog.level,
+        "progress_pct": prog.xp % 100,
+        "badges": badge_list,
+        "global_xp": current_user.xp,
+        "global_level": current_user.level
     }
 
 @router.get("/me/analytics")
-def get_user_analytics(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Calculate and return session analytics and progress trends for the user."""
-    sessions = db.query(TherapySession).filter(TherapySession.user_id == current_user.id).order_by(TherapySession.created_at.asc()).all()
+def get_user_analytics(
+    language: str = "english",
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Calculate and return session analytics and progress trends for the user, filtered by language."""
+    lang_clean = language.lower().strip()
+    
+    sessions = db.query(TherapySession).filter(
+        TherapySession.user_id == current_user.id,
+        TherapySession.language.ilike(lang_clean)
+    ).order_by(TherapySession.created_at.asc()).all()
+    
     total_attempts = len(sessions)
     
     avg_score = 0
