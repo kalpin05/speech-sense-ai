@@ -53,20 +53,20 @@ nav{position:fixed;top:0;left:0;right:0;height:60px;display:flex;align-items:cen
 .btn-logout:hover{background:#38bdf8;color:#0f172a}
 body{margin-top:60px}
 
-</style>
+<script src="js/i18n.js"></script>
 </head>
 <body>
 
 <nav>
   <a href="dashboard.html" class="nav-brand">🎯 SpeechAI</a>
   <div class="nav-links">
-    <a href="dashboard.html">Dashboard</a>
-    <a href="exercises.html" class="active">Exercises</a>
-    <a href="achievement-progress.html">Progress</a>
-    <a href="settings.html">Settings</a>
+    <a href="dashboard.html" data-i18n="nav_dashboard">Dashboard</a>
+    <a href="exercises.html" class="active" data-i18n="nav_exercises">Exercises</a>
+    <a href="achievement-progress.html" data-i18n="nav_progress">Progress</a>
+    <a href="settings.html" data-i18n="nav_settings">Settings</a>
   </div>
   <div class="nav-right">
-    <button class="btn-logout" onclick="logout()">Logout</button>
+    <button class="btn-logout" onclick="logout()" data-i18n="nav_logout">Logout</button>
   </div>
 </nav>
 
@@ -587,7 +587,7 @@ if(streak>=5)document.getElementById('b3').classList.add('active');
 }
 
 function logout() {
-  if(confirm('Are you sure you want to logout?')) {
+  if(confirm(window.I18N_LOGOUT_CONFIRM || 'Are you sure you want to logout?')) {
     localStorage.removeItem('username');
     localStorage.removeItem('speechai_token');
     window.location.href = 'index.html';
