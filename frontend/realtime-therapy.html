@@ -63,20 +63,20 @@ canvas{width:100%;height:100px;background:rgba(15,23,42,0.4);border-radius:16px;
 .status-dot.active{background:#ef4444;box-shadow:0 0 8px #ef4444;animation:pulse 1s infinite}
 @keyframes pulse{0%{opacity:0.3}50%{opacity:1}100%{opacity:0.3}}
 
-</style>
+<script src="js/i18n.js"></script>
 </head>
 <body>
 
 <nav>
   <a href="dashboard.html" class="nav-brand">🎯 SpeechAI</a>
   <div class="nav-links">
-    <a href="dashboard.html">Dashboard</a>
-    <a href="exercises.html">Exercises</a>
-    <a href="achievement-progress.html">Progress</a>
-    <a href="settings.html">Settings</a>
+    <a href="dashboard.html" data-i18n="nav_dashboard">Dashboard</a>
+    <a href="exercises.html" data-i18n="nav_exercises">Exercises</a>
+    <a href="achievement-progress.html" data-i18n="nav_progress">Progress</a>
+    <a href="settings.html" data-i18n="nav_settings">Settings</a>
   </div>
   <div class="nav-right">
-    <button class="btn-logout" onclick="logout()">Logout</button>
+    <button class="btn-logout" onclick="logout()" data-i18n="nav_logout">Logout</button>
   </div>
 </nav>
 
@@ -404,7 +404,7 @@ function stopRealTimeSession() {
 }
 
 function logout() {
-    if(confirm('Are you sure you want to logout?')) {
+    if(confirm(window.I18N_LOGOUT_CONFIRM || 'Are you sure you want to logout?')) {
         localStorage.removeItem('username');
         localStorage.removeItem('speechai_token');
         window.location.href = 'index.html';
