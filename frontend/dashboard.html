@@ -774,7 +774,11 @@ async function initializeDashboard() {
       let streak = 0;
       if (sessionsRes.ok) {
           const sessionData = await sessionsRes.json();
-          const my_sessions = sessionData.my_sessions || [];
+          let my_sessions = sessionData.my_sessions || [];
+          
+          // Filter by active interface language
+          const activeLang = localStorage.getItem('speechai_ui_lang') || 'english';
+          my_sessions = my_sessions.filter(s => s.language.toLowerCase().trim() === activeLang.toLowerCase().trim());
           
           // Reverse so oldest is first for streak/progress logic
           const chronological = [...my_sessions].reverse();
@@ -837,6 +841,10 @@ window.addEventListener('scroll', () => {
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', initializeDashboard);
+
+window.addEventListener("uiLanguageChanged", () => {
+  initializeDashboard();
+});
 
 </script>
 
