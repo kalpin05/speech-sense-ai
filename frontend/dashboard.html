@@ -568,6 +568,7 @@ main {
 }
 
 </style>
+<script src="js/i18n.js"></script>
 </head>
 <body>
 
@@ -579,16 +580,16 @@ main {
   </a>
   
   <div class="nav-center">
-    <a href="dashboard.html" style="color:var(--cyan);">Dashboard</a>
-    <a href="achievement-progress.html">Progress</a>
-    <a href="exercises.html">Exercises</a>
-    <a href="settings.html">Settings</a>
+    <a href="dashboard.html" style="color:var(--cyan);" data-i18n="nav_dashboard">Dashboard</a>
+    <a href="achievement-progress.html" data-i18n="nav_progress">Progress</a>
+    <a href="exercises.html" data-i18n="nav_exercises">Exercises</a>
+    <a href="settings.html" data-i18n="nav_settings">Settings</a>
   </div>
   
   <div class="nav-right">
     <div class="user-menu">
       <div class="user-avatar" title="User Profile">👤</div>
-      <button class="btn-logout" onclick="logout()">Logout</button>
+      <button class="btn-logout" onclick="logout()" data-i18n="nav_logout">Logout</button>
     </div>
   </div>
 </nav>
@@ -602,7 +603,7 @@ main {
       <div class="welcome-header">
         <div class="welcome-text">
           <h1>Welcome back, <span id="username">Learner</span>! 👋</h1>
-          <p>Continue your speech improvement journey with us</p>
+          <p data-i18n="dashboard_subtitle">Continue your speech improvement journey with us</p>
           <div class="welcome-date" id="currentDate"></div>
         </div>
       </div>
@@ -662,8 +663,8 @@ main {
         <a href="exercises.html" class="nav-card">
           <div class="nav-card-header">
             <div class="nav-icon">🎮</div>
-            <h3>Exercises</h3>
-            <p>Practice speech exercises and improve your pronunciation with interactive lessons.</p>
+            <h3 data-i18n="exercises_card_title">Exercises</h3>
+            <p data-i18n="exercises_card_desc">Practice speech exercises and improve your pronunciation with interactive lessons.</p>
             <div class="nav-card-features">
               <div class="feature-item">5+ difficulty levels</div>
               <div class="feature-item">Real-time feedback</div>
@@ -677,8 +678,8 @@ main {
         <a href="realtime-therapy.html" class="nav-card" style="border: 1px solid rgba(168, 85, 247, 0.4); background: rgba(168, 85, 247, 0.03);">
           <div class="nav-card-header">
             <div class="nav-icon" style="background: rgba(168, 85, 247, 0.1); color: #c084fc;">⚡</div>
-            <h3>Live Speech Room</h3>
-            <p>Practice speech exercises with live, real-time highlighting and accuracy feedback as you talk.</p>
+            <h3 data-i18n="live_room_title">Live Speech Room</h3>
+            <p data-i18n="live_room_desc">Practice speech exercises with live, real-time highlighting and accuracy feedback as you talk.</p>
             <div class="nav-card-features">
               <div class="feature-item">Real-time WebSockets</div>
               <div class="feature-item">Word-level highlights</div>
@@ -692,8 +693,8 @@ main {
         <a href="achievement-progress.html" class="nav-card">
           <div class="nav-card-header">
             <div class="nav-icon">📊</div>
-            <h3>Progress & Achievements</h3>
-            <p>Track your learning journey with detailed analytics and unlock exciting achievements.</p>
+            <h3 data-i18n="progress_card_title">Progress & Achievements</h3>
+            <p data-i18n="progress_card_desc">Track your learning journey with detailed analytics and unlock exciting achievements.</p>
             <div class="nav-card-features">
               <div class="feature-item">Performance charts</div>
               <div class="feature-item">Achievement badges</div>
@@ -707,8 +708,8 @@ main {
         <a href="settings.html" class="nav-card">
           <div class="nav-card-header">
             <div class="nav-icon">⚙️</div>
-            <h3>Settings</h3>
-            <p>Customize your learning experience, manage audio preferences, and personalize the app.</p>
+            <h3 data-i18n="settings_card_title">Settings</h3>
+            <p data-i18n="settings_card_desc">Customize your learning experience, manage audio preferences, and personalize the app.</p>
             <div class="nav-card-features">
               <div class="feature-item">Audio controls</div>
               <div class="feature-item">Learning goals</div>
@@ -723,11 +724,11 @@ main {
 
     <!-- QUICK TIPS -->
     <section class="tips-section">
-      <h3>💡 Quick Tips for Success</h3>
+      <h3 data-i18n="tips_title">💡 Quick Tips for Success</h3>
       <div class="tips-list">
-        <div class="tip-item">Practice for at least 15 minutes daily to see faster improvement</div>
-        <div class="tip-item">Use the "Speed Challenge" mode to test your fluency under pressure</div>
-        <div class="tip-item">Check your progress charts regularly to identify improvement areas</div>
+        <div class="tip-item" data-i18n="tip_1">Practice for at least 15 minutes daily to see faster improvement</div>
+        <div class="tip-item" data-i18n="tip_2">Use the "Speed Challenge" mode to test your fluency under pressure</div>
+        <div class="tip-item" data-i18n="tip_3">Check your progress charts regularly to identify improvement areas</div>
         <div class="tip-item">Unlock achievements to unlock bonus learning materials</div>
       </div>
     </section>
@@ -817,7 +818,7 @@ function calculateAchievements(scores, streak) {
 }
 
 function logout() {
-  if (confirm('Are you sure you want to logout?')) {
+  if (confirm(window.I18N_LOGOUT_CONFIRM || 'Are you sure you want to logout?')) {
     localStorage.removeItem('username');
     localStorage.removeItem('speechai_token');
     document.location = 'index.html';
