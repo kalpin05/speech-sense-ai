@@ -27,6 +27,13 @@ fileConfig(config.config_file_name)
 try:
     from app.database import Base
     from app.config import DATABASE_URL
+    # Import all models to register them on Base.metadata
+    from app.models.user import User
+    from app.models.session_model import TherapySession
+    from app.models.settings_model import UserSettings
+    from app.models.badge_model import UserBadge
+    from app.models.exercise_model import Exercise
+    from app.models.language_progress import UserLanguageProgress
     target_metadata = Base.metadata
 except Exception:
     target_metadata = None
