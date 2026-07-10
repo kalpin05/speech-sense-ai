@@ -128,9 +128,10 @@ let scores = [];
 let progressChart, performanceChart, emotionChart;
 
 async function loadData() {
+  const activeLang = localStorage.getItem('speechai_ui_lang') || 'english';
   try {
     // 1. Fetch Analytics
-    const anaRes = await fetch('/users/me/analytics', {
+    const anaRes = await fetch(`/users/me/analytics?language=${activeLang}`, {
       headers: { 'Authorization': `Bearer ${token}` }
     });
     if (anaRes.ok) {
@@ -152,7 +153,7 @@ async function loadData() {
     }
     
     // 2. Fetch Gamification
-    const gamRes = await fetch('/users/me/gamification', {
+    const gamRes = await fetch(`/users/me/gamification?language=${activeLang}`, {
       headers: { 'Authorization': `Bearer ${token}` }
     });
     if (gamRes.ok) {
@@ -249,8 +250,11 @@ function logout() {
   }
 }
 
-loadData();
-</script>
+window.addEventListener("uiLanguageChanged", () => {
+  loadData();
+});
+
+loadData();</script>
 
 </body>
 </html>
