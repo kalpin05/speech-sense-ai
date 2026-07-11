@@ -158,17 +158,10 @@ def get_patient_adaptive(
     sorted_weak_words = sorted(word_counts.items(), key=lambda x: x[1], reverse=True)
     weak_words = [w for w, count in sorted_weak_words]
     
-    sound_patterns = ["th", "sh", "ch", "wh", "ph", "tr", "pl", "gr", "st", "sp", "h", "s", "f", "r", "l", "w", "v"]
-    sound_counts = {}
-    for w in weak_words:
-        for pattern in sound_patterns:
-            if w.startswith(pattern):
-                sound_counts[pattern] = sound_counts.get(pattern, 0) + 1
-                break
-                
-    sorted_weak_sounds = sorted(sound_counts.items(), key=lambda x: x[1], reverse=True)
-    weak_sounds = [sound for sound, count in sorted_weak_sounds if count >= 1]
+    from app.services.analysis_service import analyze_language_weaknesses
+    weak_sounds, custom_drill = analyze_language_weaknesses(weak_words, language)
     
+    # Limit to top 5 weak words and top 3 weak sounds to avoid UI clutter
     top_weak_words = weak_words[:5]
     top_weak_sounds = weak_sounds[:3]
     
