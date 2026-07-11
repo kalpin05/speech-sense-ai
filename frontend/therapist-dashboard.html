@@ -347,7 +347,8 @@ async function loadPatientHistory(patientId) {
 
 async function loadPatientAdaptive(patientId) {
     try {
-        const res = await fetch(`/therapist/patients/${patientId}/adaptive?language=english`, {
+        const activeLang = localStorage.getItem('speechai_ui_lang') || 'english';
+        const res = await fetch(`/therapist/patients/${patientId}/adaptive?language=${activeLang}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         if (res.ok) {
