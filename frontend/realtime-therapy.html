@@ -87,14 +87,14 @@ canvas{width:100%;height:100px;background:rgba(15,23,42,0.4);border-radius:16px;
       <span id="statusText">Disconnected</span>
     </div>
     
-    <h1>⚡ Live Speech practice Room</h1>
-    <p class="subtitle">Select an exercise, start the session, and speak. See dynamic word highlighting and accuracy feedback in real-time.</p>
+    <h1 data-i18n="live_room_title_h1">⚡ Live Speech practice Room</h1>
+    <p class="subtitle" data-i18n="live_room_desc">Select an exercise, start the session, and speak. See dynamic word highlighting and accuracy feedback in real-time.</p>
     
     <div class="selector-box">
       <select id="exerciseSelect">
-        <option value="">-- Choose a Practice Sentence --</option>
+        <option value="" data-i18n="select_exercise_lbl">-- Choose a Practice Sentence --</option>
       </select>
-      <button class="btn-primary" onclick="loadSelectedExercise()">Load</button>
+      <button class="btn-primary" onclick="loadSelectedExercise()" data-i18n="load_std_btn">Load</button>
     </div>
     
     <div class="text-display-card">
@@ -146,13 +146,18 @@ const canvasCtx = canvas.getContext('2d');
 
 // Load exercises dropdown list on startup
 async function loadExercisesList() {
+    const activeLang = localStorage.getItem('speechai_ui_lang') || 'english';
+    currentLanguage = activeLang.charAt(0).toUpperCase() + activeLang.slice(1);
+    
+    const select = document.getElementById('exerciseSelect');
+    select.innerHTML = '<option value="" data-i18n="select_exercise_lbl">-- Choose a Practice Sentence --</option>';
+    
     try {
-        const res = await fetch('/exercises?language=english', {
+        const res = await fetch(`/exercises?language=${activeLang}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         if (res.ok) {
             const data = await res.json();
-            const select = document.getElementById('exerciseSelect');
             
             // Populate standard exercises
             data.exercises.forEach(ex => {
@@ -411,7 +416,10 @@ function logout() {
     }
 }
 
-// Initializations
+window.addEventListener("uiLanguageChanged", () => {
+    loadExercisesList();
+});
+
 loadExercisesList();
 </script>
 </body>
