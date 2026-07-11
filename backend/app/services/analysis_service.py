@@ -621,3 +621,112 @@ Response format: ONLY valid JSON, no markdown codeblocks, no extra text.
         "hesitation_score": hesitation_score,
         "emotion": dominant_emotion
     }
+
+
+def analyze_language_weaknesses(weak_words: list[str], language: str) -> tuple[list[str], str]:
+    """Identify language-specific weak sounds and generate customized practice drills."""
+    lang_clean = language.lower().strip()
+    
+    # 1. Base case: no weak words
+    if not weak_words:
+        return [], "Excellent job! No weak words detected yet."
+        
+    weak_sounds = []
+    custom_drill = ""
+    words_str = ", ".join(weak_words[:5])
+    
+    if lang_clean == "spanish":
+        # Spanish specific patterns
+        sp_counts = {}
+        for w in weak_words:
+            w_lower = w.lower()
+            if "rr" in w_lower:
+                sp_counts["Rolled 'rr'"] = sp_counts.get("Rolled 'rr'", 0) + 1
+            if w_lower.startswith("h"):
+                sp_counts["Silent 'h'"] = sp_counts.get("Silent 'h'", 0) + 1
+            if "ñ" in w_lower:
+                sp_counts["Spanish 'ñ'"] = sp_counts.get("Spanish 'ñ'", 0) + 1
+            if "ll" in w_lower:
+                sp_counts["Double 'll'"] = sp_counts.get("Double 'll'", 0) + 1
+            if w_lower.startswith("j") or w_lower.startswith("g"):
+                sp_counts["Velar 'g/j'"] = sp_counts.get("Velar 'g/j'", 0) + 1
+                
+        sorted_sp = sorted(sp_counts.items(), key=lambda x: x[1], reverse=True)
+        weak_sounds = [snd for snd, count in sorted_sp if count >= 1]
+        
+        # Select target drill based on highest frequency weakness
+        top_weak = weak_sounds[0] if weak_sounds else None
+        if top_weak == "Rolled 'rr'":
+            custom_drill = "Practice rolling your tongue. Try saying: 'Erre con erre cigarro, erre con erre barril.'"
+        elif top_weak == "Silent 'h'":
+            custom_drill = "Remember, the letter 'h' is silent in Spanish. Try saying: 'Hola, hoy hago helado.'"
+        elif top_weak == "Spanish 'ñ'":
+            custom_drill = "Practice the 'ñ' sound. Try saying: 'Mañana el niño comerá piña.'"
+        elif top_weak == "Double 'll'":
+            custom_drill = "Practice the 'll' sound (y/ly). Try saying: 'La lluvia en Sevilla es una maravilla.'"
+        elif top_weak == "Velar 'g/j'":
+            custom_drill = "Practice the aspirated 'j' or 'g' sound. Try saying: 'El gato de José juega en la jaula.'"
+        else:
+            custom_drill = f"Practice saying these Spanish words: {words_str}"
+            
+    elif lang_clean == "hindi":
+        # Hindi specific patterns (Devanagari characters or common transliterations)
+        hi_counts = {}
+        for w in weak_words:
+            # 1. Retroflexes (ट, ठ, ड, ढ, ण)
+            if any(c in w for c in ["ट", "ठ", "ड", "ढ", "ण"]):
+                hi_counts["Retroflex (ट/ड)"] = hi_counts.get("Retroflex (ट/ड)", 0) + 1
+            
+            # 2. Aspirates (ध, bh, gh, th, kh, ph)
+            elif any(c in w for c in ["ध", "भ", "घ", "थ", "ख", "छ", "झ", "ठ", "ढ", "फ़"]) or any(p in w.lower() for p in ["dh", "bh", "gh", "th", "kh", "ph"]):
+                hi_counts["Aspirated (ध/भ/th)"] = hi_counts.get("Aspirated (ध/भ/th)", 0) + 1
+                
+            # 3. Nasalization (ँ, ं)
+            elif any(c in w for c in ["ँ", "ं"]):
+                hi_counts["Nasalized (ं/ँ)"] = hi_counts.get("Nasalized (ं/ँ)", 0) + 1
+                
+            # 4. Sibilants (श, ष)
+            elif any(c in w for c in ["श", "ष"]) or w.lower().startswith("sh"):
+                hi_counts["Sibilant (श/ष)"] = hi_counts.get("Sibilant (श/ष)", 0) + 1
+                
+        sorted_hi = sorted(hi_counts.items(), key=lambda x: x[1], reverse=True)
+        weak_sounds = [snd for snd, count in sorted_hi if count >= 1]
+        
+        top_weak = weak_sounds[0] if weak_sounds else None
+        if top_weak == "Retroflex (ट/ड)":
+            custom_drill = "अपनी जीभ को ऊपर तालू से छुएं (Retroflex sound). बोलें: 'टमाटर ठंडा है, डालर लाओ।'"
+        elif top_weak == "Aspirated (ध/भ/th)":
+            custom_drill = "बोलते समय मुंह से हवा बाहर निकालें (Aspirated sound). बोलें: 'धर्म और धन बहुत भारी हैं।'"
+        elif top_weak == "Nasalized (ं/ँ)":
+            custom_drill = "नाक से आवाज निकालें (Nasalized sound). बोलें: 'चाँद सुंदर है, पतंग उड़ती है।'"
+        elif top_weak == "Sibilant (श/ष)":
+            custom_drill = "श और ष के अंतर को स्पष्ट करें। बोलें: 'शीला शाम को षड्यंत्र रचेगी।'"
+        else:
+            custom_drill = f"इन हिंदी शब्दों को बोलने का अभ्यास करें: {words_str}"
+            
+    else:
+        # Default/English patterns
+        sound_patterns = ["th", "sh", "ch", "wh", "ph", "tr", "pl", "gr", "st", "sp", "h", "s", "f", "r", "l", "w", "v"]
+        sound_counts = {}
+        for w in weak_words:
+            w_lower = w.lower()
+            for pattern in sound_patterns:
+                if w_lower.startswith(pattern) or (pattern in ["th", "sh", "ch"] and pattern in w_lower):
+                    sound_counts[f"'{pattern}' sound"] = sound_counts.get(f"'{pattern}' sound", 0) + 1
+                    break
+        sorted_en = sorted(sound_counts.items(), key=lambda x: x[1], reverse=True)
+        weak_sounds = [snd for snd, count in sorted_en if count >= 1]
+        
+        top_weak = weak_sounds[0] if weak_sounds else None
+        if top_weak == "'th' sound":
+            custom_drill = "Place your tongue between your teeth for 'th'. Practice: 'The three brothers thought of this.'"
+        elif top_weak == "'r' sound":
+            custom_drill = "Curl your tongue back without touching the roof. Practice: 'Red roses grow around the river.'"
+        elif top_weak == "'w' sound" or top_weak == "'v' sound":
+            custom_drill = "Clarify 'w' vs 'v'. Practice: 'We value very warm winter weather.'"
+        elif top_weak:
+            custom_drill = f"Focus on your {top_weak} weaknesses. Practice: 'She spoke simple sounds clearly.'"
+        else:
+            custom_drill = f"Practice saying these English words: {words_str}"
+            
+    return weak_sounds, custom_drill
