@@ -636,7 +636,6 @@ def analyze_language_weaknesses(weak_words: list[str], language: str) -> tuple[l
     words_str = ", ".join(weak_words[:5])
     
     if lang_clean == "spanish":
-        # Spanish specific patterns
         sp_counts = {}
         for w in weak_words:
             w_lower = w.lower()
@@ -654,7 +653,6 @@ def analyze_language_weaknesses(weak_words: list[str], language: str) -> tuple[l
         sorted_sp = sorted(sp_counts.items(), key=lambda x: x[1], reverse=True)
         weak_sounds = [snd for snd, count in sorted_sp if count >= 1]
         
-        # Select target drill based on highest frequency weakness
         top_weak = weak_sounds[0] if weak_sounds else None
         if top_weak == "Rolled 'rr'":
             custom_drill = "Practice rolling your tongue. Try saying: 'Erre con erre cigarro, erre con erre barril.'"
@@ -669,24 +667,23 @@ def analyze_language_weaknesses(weak_words: list[str], language: str) -> tuple[l
         else:
             custom_drill = f"Practice saying these Spanish words: {words_str}"
             
-    elif lang_clean == "hindi":
-        # Hindi specific patterns (Devanagari characters or common transliterations)
+    elif lang_clean in ["hindi", "marathi", "telugu"]:
         hi_counts = {}
         for w in weak_words:
-            # 1. Retroflexes (ट, ठ, ड, ढ, ण)
-            if any(c in w for c in ["ट", "ठ", "ड", "ढ", "ण"]):
+            # 1. Retroflexes (ट, ठ, ड, ढ, ण, ట, డ, ఠ, ఢ, ణ, ट, ड)
+            if any(c in w for c in ["ट", "ठ", "ड", "ढ", "ण", "ట", "డ", "ఠ", "ఢ", "ణ"]):
                 hi_counts["Retroflex (ट/ड)"] = hi_counts.get("Retroflex (ट/ड)", 0) + 1
             
             # 2. Aspirates (ध, bh, gh, th, kh, ph)
-            elif any(c in w for c in ["ध", "भ", "घ", "थ", "ख", "छ", "झ", "ठ", "ढ", "फ़"]) or any(p in w.lower() for p in ["dh", "bh", "gh", "th", "kh", "ph"]):
+            elif any(c in w for c in ["ध", "भ", "घ", "थ", "ख", "छ", "झ", "ठ", "ढ", "फ़", "ధ", "భ", "ఘ", "థ", "ఖ", "ఛ", "ఝ", "ఠ", "ఢ"]) or any(p in w.lower() for p in ["dh", "bh", "gh", "th", "kh", "ph"]):
                 hi_counts["Aspirated (ध/भ/th)"] = hi_counts.get("Aspirated (ध/भ/th)", 0) + 1
                 
             # 3. Nasalization (ँ, ं)
-            elif any(c in w for c in ["ँ", "ं"]):
+            elif any(c in w for c in ["ँ", "ं", "ఁ", "ం"]):
                 hi_counts["Nasalized (ं/ँ)"] = hi_counts.get("Nasalized (ं/ँ)", 0) + 1
                 
-            # 4. Sibilants (श, ष)
-            elif any(c in w for c in ["श", "ष"]) or w.lower().startswith("sh"):
+            # 4. Sibilants (श, ष, శ, ష)
+            elif any(c in w for c in ["श", "ष", "శ", "ష"]) or w.lower().startswith("sh"):
                 hi_counts["Sibilant (श/ष)"] = hi_counts.get("Sibilant (श/ष)", 0) + 1
                 
         sorted_hi = sorted(hi_counts.items(), key=lambda x: x[1], reverse=True)
@@ -702,7 +699,100 @@ def analyze_language_weaknesses(weak_words: list[str], language: str) -> tuple[l
         elif top_weak == "Sibilant (श/ष)":
             custom_drill = "श और ष के अंतर को स्पष्ट करें। बोलें: 'शीला शाम को षड्यंत्र रचेगी।'"
         else:
-            custom_drill = f"इन हिंदी शब्दों को बोलने का अभ्यास करें: {words_str}"
+            custom_drill = f"Practice these pronunciation targets: {words_str}"
+
+    elif lang_clean == "tamil":
+        ta_counts = {}
+        for w in weak_words:
+            if any(c in w for c in ["ழ", "ள", "ற", "ண", "ட"]):
+                ta_counts["Retroflex (ழ/ள)"] = ta_counts.get("Retroflex (ழ/ள)", 0) + 1
+            if any(c in w for c in ["க", "ச", "த", "ப"]):
+                ta_counts["Plosives (க/ச)"] = ta_counts.get("Plosives (க/ச)", 0) + 1
+                
+        sorted_ta = sorted(ta_counts.items(), key=lambda x: x[1], reverse=True)
+        weak_sounds = [snd for snd, count in sorted_ta if count >= 1]
+        
+        top_weak = weak_sounds[0] if weak_sounds else None
+        if top_weak == "Retroflex (ழ/ள)":
+            custom_drill = "Touch your tongue to the roof of your mouth for the Tamil retroflex. Practice: 'வாழைப்பழம் நல்ல பழம்.'"
+        else:
+            custom_drill = f"இவற்றை உச்சரிக்க பயிற்சி செய்யவும்: {words_str}"
+
+    elif lang_clean == "german":
+        de_counts = {}
+        for w in weak_words:
+            w_lower = w.lower()
+            if any(c in w_lower for c in ["ä", "ö", "ü", "ß"]):
+                de_counts["Umlaut (ä/ö/ü)"] = de_counts.get("Umlaut (ä/ö/ü)", 0) + 1
+            if "ch" in w_lower or "sch" in w_lower:
+                de_counts["Fricative (ch/sch)"] = de_counts.get("Fricative (ch/sch)", 0) + 1
+                
+        sorted_de = sorted(de_counts.items(), key=lambda x: x[1], reverse=True)
+        weak_sounds = [snd for snd, count in sorted_de if count >= 1]
+        
+        top_weak = weak_sounds[0] if weak_sounds else None
+        if top_weak == "Umlaut (ä/ö/ü)":
+            custom_drill = "Practice the correct vowel shape for Umlauts. Try saying: 'Müllmänner müssen Öl wählen.'"
+        elif top_weak == "Fricative (ch/sch)":
+            custom_drill = "Practice soft fricative air release. Try saying: 'Fischers Fritz fischt frische Fische.'"
+        else:
+            custom_drill = f"Üben Sie die Aussprache dieser Wörter: {words_str}"
+
+    elif lang_clean == "french":
+        fr_counts = {}
+        for w in weak_words:
+            w_lower = w.lower()
+            if any(p in w_lower for p in ["an", "en", "in", "on", "un"]):
+                fr_counts["Nasal vowel (an/on)"] = fr_counts.get("Nasal vowel (an/on)", 0) + 1
+            if "r" in w_lower:
+                fr_counts["Uvular 'r'"] = fr_counts.get("Uvular 'r'", 0) + 1
+                
+        sorted_fr = sorted(fr_counts.items(), key=lambda x: x[1], reverse=True)
+        weak_sounds = [snd for snd, count in sorted_fr if count >= 1]
+        
+        top_weak = weak_sounds[0] if weak_sounds else None
+        if top_weak == "Nasal vowel (an/on)":
+            custom_drill = "Let air pass through both nose and mouth. Try saying: 'Un bon vin blanc de l'an passé.'"
+        elif top_weak == "Uvular 'r'":
+            custom_drill = "Vibrate the back of your throat. Try saying: 'Le rat rouge court dans la rue.'"
+        else:
+            custom_drill = f"Entraînez-vous à prononcer ces mots: {words_str}"
+
+    elif lang_clean == "japanese":
+        ja_counts = {}
+        for w in weak_words:
+            if any(c in w for c in ["ら", "り", "る", "れ", "ろ"]) or "r" in w.lower() or "l" in w.lower():
+                ja_counts["Liquid (r/l) sound"] = ja_counts.get("Liquid (r/l) sound", 0) + 1
+            if "っ" in w or "ー" in w or any(p in w.lower() for p in ["kk", "ss", "tt", "pp"]):
+                ja_counts["Double consonant (っ)"] = ja_counts.get("Double consonant (っ)", 0) + 1
+                
+        sorted_ja = sorted(ja_counts.items(), key=lambda x: x[1], reverse=True)
+        weak_sounds = [snd for snd, count in sorted_ja if count >= 1]
+        
+        top_weak = weak_sounds[0] if weak_sounds else None
+        if top_weak == "Liquid (r/l) sound":
+            custom_drill = "Place your tongue between R and L. Try saying: '桜の木が綺麗に並んでいます。'"
+        elif top_weak == "Double consonant (っ)":
+            custom_drill = "Add a small pause before the double consonant. Try saying: '切符を買って学校へ行って。'"
+        else:
+            custom_drill = f"単語の発音を練習しましょう: {words_str}"
+
+    elif lang_clean == "arabic":
+        ar_counts = {}
+        for w in weak_words:
+            if any(c in w for c in ["ع", "ح", "خ", "ق", "ص", "ض", "ط", "ظ"]):
+                ar_counts["Guttural sound"] = ar_counts.get("Guttural sound", 0) + 1
+            if any(c in w for c in ["ا", "و", "ي"]):
+                ar_counts["Long Vowel"] = ar_counts.get("Long Vowel", 0) + 1
+                
+        sorted_ar = sorted(ar_counts.items(), key=lambda x: x[1], reverse=True)
+        weak_sounds = [snd for snd, count in sorted_ar if count >= 1]
+        
+        top_weak = weak_sounds[0] if weak_sounds else None
+        if top_weak == "Guttural sound":
+            custom_drill = "Vibrate the back of your throat. Try saying: 'خالد يحب التفاح والقهوة العربية.'"
+        else:
+            custom_drill = f"تدرب على نطق هذه الكلمات: {words_str}"
             
     else:
         # Default/English patterns
