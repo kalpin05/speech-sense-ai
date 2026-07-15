@@ -521,3 +521,50 @@ function translatePage(lang) {
     // Update global logout confirm string if requested
     window.I18N_LOGOUT_CONFIRM = dictionary.logout_confirm;
 }
+
+// Speech Synthesis (Text-to-Speech) Reference Player
+function speakTextReference(text, languageName) {
+    if (!('speechSynthesis' in window)) {
+        alert("Text-to-Speech is not supported in this browser.");
+        return;
+    }
+    
+    // Stop any active speech
+    window.speechSynthesis.cancel();
+    
+    const utterance = new SpeechSynthesisUtterance(text);
+    
+    // Map speech-sense languages to synthesis locales
+    const langMap = {
+        "english": "en-GB",
+        "hindi": "hi-IN",
+        "marathi": "mr-IN",
+        "tamil": "ta-IN",
+        "telugu": "te-IN",
+        "german": "de-DE",
+        "french": "fr-FR",
+        "spanish": "es-ES",
+        "japanese": "ja-JP",
+        "arabic": "ar-AE"
+    };
+    
+    const targetLang = (languageName || localStorage.getItem("speechai_ui_lang") || "english").toLowerCase().trim();
+    const locale = langMap[targetLang] || "en-GB";
+    utterance.lang = locale;
+    
+    // Find matching voice locale
+    if (window.speechSynthesis.onvoiceschanged !== undefined) {
+        window.speechSynthesis.onvoiceschanged = () => {};
+    }
+    
+    const voices = window.speechSynthesis.getVoices();
+    const voice = voices.find(v => v.lang.startsWith(locale) || v.lang.includes(locale.replace("-", "_")));
+    if (voice) {
+        utterance.voice = voice;
+    }
+    
+    // Slightly slower rate for therapy speech modeling
+    utterance.rate = 0.85;
+    
+    window.speechSynthesis.speak(utterance);
+}
