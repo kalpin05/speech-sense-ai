@@ -155,7 +155,12 @@ body{margin-top:60px}
   
   <div style="background:rgba(56,189,248,0.08); padding:15px; border-radius:12px; border:1px solid rgba(56,189,248,0.2); margin-bottom:15px;">
     <h4 style="margin-top:0; color:#38bdf8; margin-bottom:4px;">⚡ Generated Custom Practice Drill</h4>
-    <p id="customDrillText" style="font-size:1.05rem; font-weight:600; margin:8px 0; color:white;">--</p>
+    <div style="display:flex; align-items:center; gap:12px; margin:8px 0;">
+      <p id="customDrillText" style="font-size:1.05rem; font-weight:600; margin:0; color:white;">--</p>
+      <button onclick="playCustomDrill()" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); color:#38bdf8; border-radius:50%; width:32px; height:32px; font-size:0.9rem; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; transition:.2s;" title="Hear drill pronunciation">
+        <i class="fa-solid fa-volume-high"></i>
+      </button>
+    </div>
     <button class="btn" style="width:auto; padding:8px 16px; margin:0;" onclick="startCustomDrill()">Load Practice Drill</button>
   </div>
   
@@ -175,7 +180,12 @@ body{margin-top:60px}
 </div>
 
 <div class="recorder">
-<h2 id="targetText">Select an exercise from above</h2>
+<div style="display:flex; justify-content:center; align-items:center; gap:10px; margin-bottom:15px; flex-wrap:wrap;">
+  <h2 id="targetText" style="margin:0;">Select an exercise from above</h2>
+  <button id="hearReferenceBtn" onclick="playCurrentReference()" style="display:none; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); color:#38bdf8; border-radius:50%; width:40px; height:40px; font-size:1.1rem; cursor:pointer; align-items:center; justify-content:center; transition:.2s;" title="Hear correct pronunciation">
+    <i class="fa-solid fa-volume-high"></i>
+  </button>
+</div>
 <button class="mic-btn" id="micBtn" onclick="toggleRecording()">🎙</button>
 <div class="score" id="score">Score: --</div>
 <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
@@ -417,6 +427,26 @@ function startExercise(text){
     document.getElementById('targetText').innerText=text;
     document.getElementById('diffOutput').style.display='none';
     document.getElementById('score').innerText='Score: --';
+    
+    const speakBtn = document.getElementById('hearReferenceBtn');
+    if (speakBtn) {
+        speakBtn.style.display = 'inline-flex';
+    }
+}
+
+function playCurrentReference() {
+    if (target) {
+        const activeLang = localStorage.getItem('speechai_ui_lang') || 'english';
+        speakTextReference(target, activeLang);
+    }
+}
+
+function playCustomDrill() {
+    const drill = document.getElementById('customDrillText').innerText;
+    if (drill && drill !== '--') {
+        const activeLang = localStorage.getItem('speechai_ui_lang') || 'english';
+        speakTextReference(drill, activeLang);
+    }
 }
 
 function startGameMode(){
