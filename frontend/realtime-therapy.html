@@ -36,10 +36,50 @@ select{background:#1e293b;border:1px solid rgba(255,255,255,0.1);color:white;pad
 .text-display-card{background:rgba(0,0,0,0.2);padding:25px;border-radius:16px;margin-bottom:25px;border:1px solid rgba(255,255,255,0.05);min-height:100px}
 .expected-label{font-size:0.75rem;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px}
 .expected-text-box{font-size:1.4rem;line-height:1.7;color:#475569;font-weight:600;display:flex;flex-wrap:wrap;gap:8px}
-.word-span{transition:color 0.3s, transform 0.2s}
-.word-span.spoken-correct{color:#22c55e;text-shadow:0 0 10px rgba(34,197,94,0.3)}
-.word-span.spoken-missed{color:#ef4444;text-shadow:0 0 10px rgba(239,68,68,0.2)}
-.word-span.unspoken{color:#94a3b8}
+.word-span{transition:all 0.3s; cursor:pointer;}
+.word-span.spoken-correct{color:#10b981; background:rgba(16, 185, 129, 0.08); border:1px solid rgba(16, 185, 129, 0.15);}
+.word-span.spoken-missed{color:#ef4444; background:rgba(239, 68, 68, 0.08); border:1px solid rgba(239, 68, 68, 0.15); text-decoration: line-through;}
+.word-span.unspoken{color:#94a3b8; background:rgba(255, 255, 255, 0.03); border:1px solid rgba(255,255,255,0.03);}
+
+/* Interactive Pronunciation Word Diff Styles */
+.diff-word-wrapper {
+  position: relative;
+  display: inline-block;
+}
+.diff-tooltip {
+  display: none;
+  position: absolute;
+  bottom: 125%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 210px;
+  background: #1e293b;
+  border: 1px solid rgba(255,255,255,0.15);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+  padding: 8px 12px;
+  border-radius: 10px;
+  z-index: 100;
+  font-size: 0.8rem;
+  font-weight: 400;
+  text-align: left;
+  line-height: 1.4;
+  pointer-events: none;
+  color: white;
+  transition: opacity 0.15s;
+}
+.diff-tooltip::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 6px;
+  border-style: solid;
+  border-color: #1e293b transparent transparent transparent;
+}
+.diff-word-wrapper:hover .diff-tooltip {
+  display: block;
+}
 
 /* INTERMEDIATE TRANSCRIPTION */
 .transcription-card{background:rgba(255,255,255,0.03);padding:20px;border-radius:16px;margin-bottom:25px;border:1px solid rgba(255,255,255,0.03)}
@@ -205,11 +245,27 @@ function loadSelectedExercise() {
     
     const words = text.split(/\s+/);
     words.forEach((w, idx) => {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'diff-word-wrapper';
+        wrapper.style.margin = '4px 6px';
+        
         const span = document.createElement('span');
         span.className = 'word-span unspoken';
         span.id = `word-${idx}`;
+        span.style.padding = '3px 8px';
+        span.style.borderRadius = '6px';
+        span.style.fontWeight = '600';
+        span.style.fontSize = '1.3rem';
         span.innerText = w;
-        box.appendChild(span);
+        
+        const tooltip = document.createElement('div');
+        tooltip.className = 'diff-tooltip';
+        tooltip.id = `tooltip-${idx}`;
+        tooltip.innerHTML = `<div style="color:#94a3b8; font-weight:bold;">Not spoken yet</div>`;
+        
+        wrapper.appendChild(span);
+        wrapper.appendChild(tooltip);
+        box.appendChild(wrapper);
     });
     
     document.getElementById('liveTranscriptionText').innerText = "Ready. Click 'Start Live Session' to practice.";
@@ -334,17 +390,31 @@ function highlightWords(alignmentWords) {
     words.forEach((_, idx) => {
         const el = document.getElementById(`word-${idx}`);
         if (el) el.className = 'word-span unspoken';
+        const tt = document.getElementById(`tooltip-${idx}`);
+        if (tt) tt.innerHTML = `<div style="color:#94a3b8; font-weight:bold;">Not spoken yet</div>`;
     });
     
     // Walk the alignment returned and mark matched items
-    // Since speech is spoken chronologically, we match alignment words to expected words
     alignmentWords.forEach((alignObj, idx) => {
         const el = document.getElementById(`word-${idx}`);
+        const tt = document.getElementById(`tooltip-${idx}`);
         if (el) {
             if (alignObj.status === 'correct') {
                 el.className = 'word-span spoken-correct';
+                if (tt) {
+                    tt.innerHTML = `<div style="color:#10b981; font-weight:bold;">Pronounced correctly</div>`;
+                }
             } else {
                 el.className = 'word-span spoken-missed';
+                if (tt) {
+                    const confidencePercent = alignObj.confidence ? `${Math.round(alignObj.confidence * 100)}%` : 'unknown';
+                    const heardWord = alignObj.heard ? `"${alignObj.heard}"` : 'different sound';
+                    tt.innerHTML = `
+                        <div style="color:#ef4444; font-weight:bold; margin-bottom:4px;">Mispronounced / Omitted</div>
+                        <div style="margin-bottom:2px;"><b>Heard:</b> <span style="color:#fdba74;">${heardWord}</span></div>
+                        <div><b>Confidence:</b> ${confidencePercent}</div>
+                    `;
+                }
             }
         }
     });
