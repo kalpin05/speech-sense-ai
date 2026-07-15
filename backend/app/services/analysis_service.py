@@ -281,7 +281,8 @@ def analyze_pronunciation(expected_text: str, whisper_result: dict, language_cod
                     "error_type": "none",
                     "confidence": 1.0,
                     "start": 0.0,
-                    "end": 0.0
+                    "end": 0.0,
+                    "heard": None
                 })
             else:
                 incorrect_words.append(exp_word)
@@ -291,7 +292,8 @@ def analyze_pronunciation(expected_text: str, whisper_result: dict, language_cod
                     "error_type": "mispronounced",
                     "confidence": 0.0,
                     "start": 0.0,
-                    "end": 0.0
+                    "end": 0.0,
+                    "heard": "unknown"
                 })
         return {
             "incorrect_words": incorrect_words,
@@ -339,7 +341,8 @@ def analyze_pronunciation(expected_text: str, whisper_result: dict, language_cod
                 "error_type": error_type,
                 "confidence": round(prob, 2),
                 "start": round(start, 2),
-                "end": round(end, 2)
+                "end": round(end, 2),
+                "heard": w_obj.get("word", "") if status == "incorrect" else None
             })
         else:
             incorrect_words.append(exp_word)
@@ -349,7 +352,8 @@ def analyze_pronunciation(expected_text: str, whisper_result: dict, language_cod
                 "error_type": "omitted",
                 "confidence": 0.0,
                 "start": 0.0,
-                "end": 0.0
+                "end": 0.0,
+                "heard": None
             })
             
     return {
