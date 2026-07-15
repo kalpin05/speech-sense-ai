@@ -52,6 +52,92 @@ nav{position:fixed;top:0;left:0;right:0;height:60px;display:flex;align-items:cen
 .btn-logout{padding:8px 16px;background:transparent;border:1px solid #38bdf8;color:#38bdf8;border-radius:6px;cursor:pointer;font-size:0.85rem;transition:all 0.2s}
 .btn-logout:hover{background:#38bdf8;color:#0f172a}
 body{margin-top:60px}
+
+/* Interactive Pronunciation Word Diff Styles */
+.diff-sentence-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  align-items: center;
+  padding: 15px;
+  background: rgba(0,0,0,0.2);
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.05);
+  margin-top: 10px;
+  margin-bottom: 15px;
+}
+.diff-word-wrapper {
+  position: relative;
+  display: inline-block;
+}
+.diff-word {
+  font-weight: 600;
+  font-size: 1.1rem;
+  padding: 3px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-block;
+}
+.diff-word.correct {
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.15);
+}
+.diff-word.correct:hover {
+  background: rgba(16, 185, 129, 0.15);
+}
+.diff-word.mispronounced {
+  color: #f97316;
+  background: rgba(249, 115, 22, 0.08);
+  border: 1px solid rgba(249, 115, 22, 0.2);
+}
+.diff-word.mispronounced:hover {
+  background: rgba(249, 115, 22, 0.18);
+}
+.diff-word.omitted {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  text-decoration: line-through;
+}
+.diff-word.omitted:hover {
+  background: rgba(239, 68, 68, 0.18);
+}
+.diff-tooltip {
+  display: none;
+  position: absolute;
+  bottom: 125%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 230px;
+  background: #1e293b;
+  border: 1px solid rgba(255,255,255,0.15);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+  padding: 10px 12px;
+  border-radius: 10px;
+  z-index: 100;
+  font-size: 0.8rem;
+  font-weight: 400;
+  text-align: left;
+  line-height: 1.4;
+  pointer-events: none;
+  color: white;
+  transition: opacity 0.15s;
+}
+.diff-tooltip::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 6px;
+  border-style: solid;
+  border-color: #1e293b transparent transparent transparent;
+}
+.diff-word-wrapper:hover .diff-tooltip {
+  display: block;
+}
 </style>
 <script src="js/i18n.js"></script>
 </head>
@@ -526,34 +612,55 @@ async function toggleRecording() {
                         
                         let htmlContent = `
                             <div style="margin-bottom:12px;"><b>AI Feedback:</b> ${feedbackData.message}</div>
-                            <div style="margin-bottom:12px; color:#94a3b8; font-style:italic;"><b>What the AI heard:</b> "${data.transcription}"</div>
+                            <div style="margin-bottom:15px; color:#94a3b8; font-style:italic;"><b>What the AI heard:</b> "${data.transcription}"</div>
                         `;
                         
                         // Render detailed pronunciation analysis if available
                         if (feedbackData.detailed_analysis && feedbackData.detailed_analysis.length > 0) {
-                            htmlContent += `<div style="margin-bottom:10px;"><b>Pronunciation Breakdown:</b></div>`;
+                            htmlContent += `<div style="margin-bottom:8px; font-weight:600; color:#8fa5bc;">Interactive Sentence Analysis (Hover over colored words):</div>`;
+                            htmlContent += `<div class="diff-sentence-container">`;
+                            
                             feedbackData.detailed_analysis.forEach(item => {
-                                let color = 'white';
-                                let errorBadge = '';
+                                let statusClass = 'correct';
+                                let statusLabel = 'Correct';
+                                let tooltipDetails = '';
+                                
                                 if (item.status === 'correct') {
-                                    color = '#10b981'; // Green for correct
+                                    statusClass = 'correct';
+                                    statusLabel = 'Pronounced correctly';
+                                    tooltipDetails = `<div style="color:#10b981; font-weight:bold;">${statusLabel}</div>`;
                                 } else if (item.error_type === 'mispronounced') {
-                                    color = '#f97316'; // Orange for mispronounced
-                                    errorBadge = ` <span style="font-size:0.7rem; padding:1px 4px; background:#7c2d12; color:#ffedd5; border-radius:4px;">mispronounced (${Math.round(item.confidence * 100)}%)</span>`;
+                                    statusClass = 'mispronounced';
+                                    statusLabel = 'Mispronounced';
+                                    const heardWord = item.heard ? `"${item.heard}"` : 'different sound';
+                                    tooltipDetails = `
+                                        <div style="color:#f97316; font-weight:bold; margin-bottom:4px;">${statusLabel}</div>
+                                        <div style="margin-bottom:2px;"><b>Heard:</b> <span style="color:#fdba74;">${heardWord}</span></div>
+                                        <div><b>Confidence:</b> ${Math.round(item.confidence * 100)}%</div>
+                                    `;
                                 } else if (item.error_type === 'omitted') {
-                                    color = '#ef4444'; // Red for omitted
-                                    errorBadge = ` <span style="font-size:0.7rem; padding:1px 4px; background:#7f1d1d; color:#fee2e2; border-radius:4px;">omitted</span>`;
+                                    statusClass = 'omitted';
+                                    statusLabel = 'Word Omitted';
+                                    tooltipDetails = `
+                                        <div style="color:#ef4444; font-weight:bold; margin-bottom:4px;">${statusLabel}</div>
+                                        <div>Word was not detected in recording. Try speaking clearly.</div>
+                                    `;
                                 }
                                 
-                                const timeStr = (item.start !== 0.0 || item.end !== 0.0) ? `<span style="color:#64748b; font-size:0.75rem; margin-left:4px;">(${item.start}s - ${item.end}s)</span>` : '';
-                                htmlContent += `<div style="margin-bottom:6px; padding:6px 10px; background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.03); border-radius:8px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
-                                    <div>
-                                        <span style="color:${color}; font-weight:600; font-size:1rem;">${item.word}</span>
-                                        ${timeStr}
+                                const timeStr = (item.start !== 0.0 || item.end !== 0.0) ? `<div style="color:#8fa5bc; font-size:0.7rem; margin-top:4px; border-top:1px solid rgba(255,255,255,0.08); padding-top:4px;">Time: ${item.start}s - ${item.end}s</div>` : '';
+                                
+                                htmlContent += `
+                                    <div class="diff-word-wrapper">
+                                        <span class="diff-word ${statusClass}">${item.word}</span>
+                                        <div class="diff-tooltip">
+                                            ${tooltipDetails}
+                                            ${timeStr}
+                                        </div>
                                     </div>
-                                    <div>${errorBadge}</div>
-                                </div>`;
+                                `;
                             });
+                            
+                            htmlContent += `</div>`;
                             
                             // Render weak words list
                             if (feedbackData.incorrect_words && feedbackData.incorrect_words.length > 0) {
@@ -564,14 +671,14 @@ async function toggleRecording() {
                             }
                         } else {
                             // Fallback to simple diff visualizer
-                            htmlContent += `<b>Word Analysis:</b><br>`;
+                            htmlContent += `<b>Word Analysis:</b><br><div class="diff-sentence-container">`;
                             feedbackData.diff.forEach(item => {
-                                let color = 'white';
-                                if (item.status === 'correct') color = '#38bdf8';
-                                else if (item.status === 'missed') color = '#ef4444';
-                                else if (item.status === 'extra') color = '#facc15';
-                                htmlContent += `<span style="color:${color}; margin-right:4px;">${item.word}</span>`;
+                                let statusClass = 'correct';
+                                if (item.status === 'missed') statusClass = 'omitted';
+                                else if (item.status === 'extra') statusClass = 'mispronounced';
+                                htmlContent += `<span class="diff-word ${statusClass}">${item.word}</span>`;
                             });
+                            htmlContent += `</div>`;
                         }
                         
                         diffContainer.innerHTML = htmlContent;
