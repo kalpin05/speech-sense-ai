@@ -653,6 +653,32 @@ main {
       </button>
     </section>
 
+    <!-- PRACTICE HEATMAP SECTION -->
+    <section class="heatmap-section" style="background:linear-gradient(135deg, var(--bg2), var(--bg3)); border:1px solid var(--border); border-radius:var(--radius-lg); padding:2.2rem; margin-bottom:2.2rem;">
+      <h3 style="font-family:var(--font-display); font-size:1.5rem; font-weight:700; margin-bottom:0.6rem; display:flex; align-items:center; gap:10px;">
+        🔥 Practice Consistency Grid
+      </h3>
+      <p style="color:var(--text2); font-size:0.95rem; margin-bottom:1.5rem;">Track your daily speech practice consistency over the last 180 days. Hover over squares to see dates.</p>
+      
+      <div id="heatmapGridContainer" style="display:grid; grid-template-columns:repeat(26, 1fr); gap:6px; max-width:100%; overflow-x:auto; padding:10px 0;">
+        <!-- Heatmap cells injected dynamically via JavaScript -->
+      </div>
+      
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:14px; font-size:0.8rem; color:var(--text2);">
+        <span>180 Days Ago</span>
+        <div style="display:flex; align-items:center; gap:5px;">
+          <span>Less</span>
+          <div style="width:14px; height:14px; background:#1e293b; border-radius:3px;"></div>
+          <div style="width:14px; height:14px; background:#0e4429; border-radius:3px;"></div>
+          <div style="width:14px; height:14px; background:#006d32; border-radius:3px;"></div>
+          <div style="width:14px; height:14px; background:#26a641; border-radius:3px;"></div>
+          <div style="width:14px; height:14px; background:#39d353; border-radius:3px;"></div>
+          <span>More</span>
+        </div>
+        <span>Today</span>
+      </div>
+    </section>
+
     <!-- NAVIGATION SECTION -->
     <section class="navigation-section">
       <h2>📚 Choose Your Learning Path</h2>
@@ -806,9 +832,88 @@ async function initializeDashboard() {
           else if (todayProgress >= 60) posElement.textContent = '↑ Good progress!';
           else posElement.textContent = 'Keep practicing!';
       }
+      
+      // Load practice consistency heatmap
+      loadPracticeHeatmap();
   } catch (err) {
       console.error("Dashboard init error:", err);
   }
+}
+
+async function loadPracticeHeatmap() {
+    const token = localStorage.getItem('speechai_token');
+    if (!token) return;
+    
+    try {
+        const res = await fetch('/me/practice-heatmap', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+            const data = await res.json();
+            const heatmap = data.heatmap || {};
+            renderHeatmapGrid(heatmap);
+        }
+    } catch(e) {
+        console.error("Failed to load practice heatmap", e);
+    }
+}
+
+function renderHeatmapGrid(heatmapData) {
+    const container = document.getElementById('heatmapGridContainer');
+    if (!container) return;
+    container.innerHTML = '';
+    
+    const today = new Date();
+    const dates = [];
+    
+    // Generate YYYY-MM-DD for the last 182 days (26 weeks)
+    for (let i = 181; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(today.getDate() - i);
+        
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        const dateStr = `${yyyy}-${mm}-${dd}`;
+        
+        dates.push({
+            date: dateStr,
+            displayDate: d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+        });
+    }
+    
+    // Inject cell boxes into container
+    dates.forEach(dObj => {
+        const count = heatmapData[dObj.date] || 0;
+        
+        // GitHub-style green colors
+        let color = '#1e293b'; 
+        if (count === 1) color = '#0e4429';
+        else if (count >= 2 && count <= 3) color = '#006d32';
+        else if (count >= 4 && count <= 5) color = '#26a641';
+        else if (count >= 6) color = '#39d353';
+        
+        const cell = document.createElement('div');
+        cell.style.aspectRatio = '1';
+        cell.style.background = color;
+        cell.style.borderRadius = '3px';
+        cell.style.cursor = 'pointer';
+        cell.style.transition = 'transform 0.15s, filter 0.15s';
+        
+        const exercisesPlural = count === 1 ? 'exercise' : 'exercises';
+        cell.title = `${count} ${exercisesPlural} on ${dObj.displayDate}`;
+        
+        cell.onmouseenter = () => {
+            cell.style.transform = 'scale(1.2)';
+            cell.style.filter = 'brightness(1.2)';
+        };
+        cell.onmouseleave = () => {
+            cell.style.transform = 'scale(1)';
+            cell.style.filter = 'brightness(1)';
+        };
+        
+        container.appendChild(cell);
+    });
 }
 
 function calculateAchievements(scores, streak) {
