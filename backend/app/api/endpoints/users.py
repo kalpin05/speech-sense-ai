@@ -238,3 +238,32 @@ def get_user_analytics(
     }
 
 
+@router.get("/me/practice-heatmap")
+def get_user_practice_heatmap(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Retrieve daily practice session counts for the last 180 days to populate the consistency heatmap."""
+    from datetime import datetime, timedelta
+    from sqlalchemy import func
+    
+    # Start date is 180 days ago
+    start_date = datetime.utcnow() - timedelta(days=180)
+    
+    # Query sessions grouped by date
+    results = db.query(
+        func.date(TherapySession.created_at).label("date"),
+        func.count(TherapySession.id).label("count")
+    ).filter(
+        TherapySession.user_id == current_user.id,
+        TherapySession.created_at >= start_date
+    ).group_by(
+        func.date(TherapySession.created_at)
+    ).all()
+    
+    # Format as dictionary mapping YYYY-MM-DD -> count
+    heatmap_data = {str(r.date): r.count for r in results}
+    
+    return {"heatmap": heatmap_data}
+
+
