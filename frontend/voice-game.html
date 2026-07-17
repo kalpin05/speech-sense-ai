@@ -30,9 +30,9 @@ h1{font-weight:700;margin-bottom:10px;background:linear-gradient(90deg,#f59e0b,#
 p.subtitle{color:#94a3b8;font-size:0.95rem;margin-bottom:20px}
 
 /* CANVAS GAME */
-.game-container{position:relative;width:100%;background:#090d16;border-radius:18px;border:2px solid rgba(255,255,255,0.1);overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,0.5)}
-canvas{display:block;width:100%;height:400px}
-.game-overlay{position:absolute;inset:0;background:rgba(15,23,42,0.85);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:15px;color:white;z-index:10;transition:.3s}
+.game-container{position:relative;width:100%;height:400px;background:#090d16;border-radius:18px;border:2px solid rgba(255,255,255,0.1);overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,0.5)}
+canvas{display:block;width:100%;height:100%}
+.game-overlay{position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(15,23,42,0.85);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:15px;color:white;z-index:10;transition:.3s}
 
 /* BUTTONS & CONTROLS */
 .btn-control{padding:12px 24px;border:none;border-radius:10px;font-weight:600;font-size:0.95rem;cursor:pointer;display:inline-flex;align-items:center;gap:8px;transition:all 0.2s}
@@ -149,6 +149,11 @@ canvas{display:block;width:100%;height:400px}
 </div>
 
 <script>
+window.onerror = function(msg, url, line) {
+    alert("JS Error: " + msg + "\nFile: " + url + "\nLine: " + line);
+    return false;
+};
+
 // Authentication check
 const token = localStorage.getItem('speechai_token');
 if (!token) {
@@ -181,7 +186,41 @@ let frameCount = 0;
 function resizeCanvas() {
     canvas.width = canvas.parentElement.clientWidth;
     canvas.height = 400;
+    if (!gameActive) {
+        drawSplashScreen();
+    }
 }
+
+function drawSplashScreen() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Draw background grid
+    ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < canvas.width; i += 30) {
+        ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, canvas.height); ctx.stroke();
+    }
+    for (let j = 0; j < canvas.height; j += 30) {
+        ctx.beginPath(); ctx.moveTo(0, j); ctx.lineTo(canvas.width, j); ctx.stroke();
+    }
+    
+    // Draw welcome title text
+    ctx.fillStyle = '#facc15';
+    ctx.font = 'bold 28px Inter, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Speech Balloon Game', canvas.width / 2, canvas.height / 2 - 40);
+    
+    // Draw description
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '16px Inter, sans-serif';
+    ctx.fillText('Control the balloon height with your voice pitch!', canvas.width / 2, canvas.height / 2);
+    
+    // Draw start tip
+    ctx.fillStyle = '#38bdf8';
+    ctx.font = 'bold 16px Inter, sans-serif';
+    ctx.fillText('Click "Start Game Session" to begin!', canvas.width / 2, canvas.height / 2 + 50);
+}
+
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
@@ -270,6 +309,10 @@ async function calibrateVocalLimit(type) {
     const success = await initAudio();
     if (!success) return;
     
+    if (audioCtx && audioCtx.state === 'suspended') {
+        await audioCtx.resume();
+    }
+    
     const btn = document.getElementById(type === 'low' ? 'calLowBtn' : 'calHighBtn');
     const origText = btn.innerText;
     btn.disabled = true;
@@ -311,6 +354,10 @@ async function calibrateVocalLimit(type) {
 async function startGame() {
     const success = await initAudio();
     if (!success) return;
+    
+    if (audioCtx && audioCtx.state === 'suspended') {
+        await audioCtx.resume();
+    }
     
     // Close overlay
     document.getElementById('gameOverlay').style.display = 'none';
