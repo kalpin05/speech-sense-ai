@@ -31,8 +31,8 @@ p.subtitle{color:#94a3b8;font-size:0.95rem;margin-bottom:20px}
 
 /* CANVAS GAME */
 .game-container{position:relative;width:100%;height:400px;background:#090d16;border-radius:18px;border:2px solid rgba(255,255,255,0.1);overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,0.5)}
-canvas{display:block;width:100%;height:100%}
-.game-overlay{position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(15,23,42,0.85);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:15px;color:white;z-index:10;transition:.3s}
+canvas{display:block;width:100%;height:100%;position:relative;z-index:1}
+.game-overlay{position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(15,23,42,0.9);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:15px;color:white;z-index:100;transition:.3s}
 
 /* BUTTONS & CONTROLS */
 .btn-control{padding:12px 24px;border:none;border-radius:10px;font-weight:600;font-size:0.95rem;cursor:pointer;display:inline-flex;align-items:center;gap:8px;transition:all 0.2s}
@@ -222,7 +222,11 @@ function drawSplashScreen() {
 }
 
 window.addEventListener('resize', resizeCanvas);
-resizeCanvas();
+window.addEventListener('load', resizeCanvas);
+document.addEventListener('DOMContentLoaded', resizeCanvas);
+// Run immediate fallback
+setTimeout(resizeCanvas, 100);
+setTimeout(resizeCanvas, 500);
 
 // Initial high score loading
 let savedHighScore = parseInt(localStorage.getItem('speechai_high_score')) || 0;
@@ -248,34 +252,38 @@ function autoCorrelate(buffer, sampleRate) {
     for (let i = SIZE - 1; i >= SIZE / 2; i--) {
         if (Math.abs(buffer[i]) < thres) { r2 = i; break; }
     }
-    buffer = buffer.slice(r1, r2);
-    SIZE = buffer.length;
+    
+    // Subarray prevents memory copying and typed array slice crashes
+    let sliced = buffer.subarray ? buffer.subarray(r1, r2) : buffer.slice(r1, r2);
+    let len = sliced.length;
+    if (len === 0) return -1;
 
-    let maxSamples = Math.floor(SIZE / 2);
+    let maxSamples = Math.floor(len / 2);
     let correlations = new Float32Array(maxSamples);
     for (let offset = 0; offset < maxSamples; offset++) {
         let correlation = 0;
         for (let i = 0; i < maxSamples; i++) {
-            correlation += Math.abs((buffer[i]) - (buffer[i + offset]));
+            correlation += Math.abs(sliced[i] - sliced[i + offset]);
         }
         correlations[offset] = correlation;
     }
 
+    // Find the first valley to avoid zero offset peak
     let d = 0;
-    while (correlations[d] > correlations[d + 1]) d++;
-    let minval = correlations[d];
-    let maxval = -1;
-    let best_offset = -1;
-    
-    for (let i = d; i < maxSamples; i++) {
-        if (correlations[i] < minval) minval = correlations[i];
-        if (correlations[i] > maxval) maxval = correlations[i];
+    while (d < maxSamples - 1 && correlations[d] > correlations[d + 1]) {
+        d++;
     }
     
-    for (let i = d; i < maxSamples - 1; i++) {
+    let minval = correlations[d];
+    let best_offset = -1;
+    
+    // Search for first peak (valley in standard autocorrelation representation)
+    for (let i = Math.max(1, d); i < maxSamples - 1; i++) {
         if (correlations[i] < correlations[i - 1] && correlations[i] < correlations[i + 1]) {
-            best_offset = i;
-            break;
+            if (best_offset === -1 || correlations[i] < minval) {
+                minval = correlations[i];
+                best_offset = i;
+            }
         }
     }
     
@@ -290,7 +298,14 @@ async function initAudio() {
     if (audioCtx) return true;
     try {
         micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+        
+        // Robust construction with fallback for Safari/mobile webviews
+        try {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+        } catch(e) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        
         const source = audioCtx.createMediaStreamSource(micStream);
         
         analyserNode = audioCtx.createAnalyser();
