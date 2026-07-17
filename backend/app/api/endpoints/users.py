@@ -267,3 +267,57 @@ def get_user_practice_heatmap(
     return {"heatmap": heatmap_data}
 
 
+class GameScoreRequest(BaseModel):
+    score: int
+    language: str = "english"
+
+
+@router.post("/me/game-score")
+def record_game_score(
+    payload: GameScoreRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Log a voice game session, credit XP to the user globally and for the target language, and update level."""
+    from app.models.language_progress import UserLanguageProgress
+    
+    # Calculate XP reward based on game score
+    # 1 XP per point scored, max 20 XP per session to avoid exploits
+    xp_gained = min(20, max(5, payload.score // 5))
+    
+    # Credit global XP
+    current_user.xp += xp_gained
+    current_user.level = (current_user.xp // 100) + 1
+    
+    # Credit language-specific XP
+    lang_clean = payload.language.lower().strip()
+    prog = db.query(UserLanguageProgress).filter(
+        UserLanguageProgress.user_id == current_user.id,
+        UserLanguageProgress.language == lang_clean
+    ).first()
+    
+    if not prog:
+        prog = UserLanguageProgress(
+            user_id=current_user.id,
+            language=lang_clean,
+            xp=0,
+            level=1,
+            streak=0
+        )
+        db.add(prog)
+        
+    prog.xp += xp_gained
+    prog.level = (prog.xp // 100) + 1
+    
+    db.commit()
+    
+    return {
+        "status": "success",
+        "xp_gained": xp_gained,
+        "global_xp": current_user.xp,
+        "global_level": current_user.level,
+        "lang_xp": prog.xp,
+        "lang_level": prog.level
+    }
+
+
