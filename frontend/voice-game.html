@@ -232,6 +232,21 @@ setTimeout(resizeCanvas, 500);
 let savedHighScore = parseInt(localStorage.getItem('speechai_high_score')) || 0;
 document.getElementById('highScore').innerText = savedHighScore;
 
+function getTimeDomainData(analyser) {
+    const size = analyser.fftSize;
+    const buffer = new Float32Array(size);
+    if (analyser.getFloat32TimeDomainData) {
+        analyser.getFloat32TimeDomainData(buffer);
+    } else {
+        const byteBuffer = new Uint8Array(size);
+        analyser.getByteTimeDomainData(byteBuffer);
+        for (let i = 0; i < size; i++) {
+            buffer[i] = (byteBuffer[i] - 128) / 128.0;
+        }
+    }
+    return buffer;
+}
+
 // Autocorrelation Pitch-Detection Algorithm
 function autoCorrelate(buffer, sampleRate) {
     let SIZE = buffer.length;
@@ -337,8 +352,7 @@ async function calibrateVocalLimit(type) {
     let count = 0;
     
     const interval = setInterval(() => {
-        const buffer = new Float32Array(analyserNode.fftSize);
-        analyserNode.getFloat32TimeDomainData(buffer);
+        const buffer = getTimeDomainData(analyserNode);
         const pitch = autoCorrelate(buffer, audioCtx.sampleRate);
         if (pitch > 50 && pitch < 1000) {
             samples.push(pitch);
@@ -439,8 +453,7 @@ function loop() {
     frameCount++;
     
     // 1. Fetch Real-time Audio Biofeedback
-    const buffer = new Float32Array(analyserNode.fftSize);
-    analyserNode.getFloat32TimeDomainData(buffer);
+    const buffer = getTimeDomainData(analyserNode);
     
     // Calculate RMS volume (Loudness)
     let sum = 0;
