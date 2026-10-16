@@ -18,7 +18,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy backend files
 COPY backend/app ./app
-COPY backend/alembic.ini ./alembic.ini
+COPY alembic.ini ./alembic.ini
 COPY backend/alembic ./alembic
 
 # Copy frontend static files to /frontend to match Path(__file__).resolve().parents[2] / "frontend" path in main.py

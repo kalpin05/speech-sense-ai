@@ -860,7 +860,7 @@ async function loadPracticeHeatmap() {
     if (!token) return;
     
     try {
-        const res = await fetch('/me/practice-heatmap', {
+        const res = await fetch('/users/me/practice-heatmap', {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         if (res.ok) {

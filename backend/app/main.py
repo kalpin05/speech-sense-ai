@@ -280,7 +280,10 @@ async def analyze_audio(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.get("/users")
-def get_all_users(skip: int = Query(0, ge=0), limit: int = Query(100, ge=1, le=1000), db: Session = Depends(get_db)):
+def get_all_users(skip: int = Query(0, ge=0), limit: int = Query(100, ge=1, le=1000), db: Session = Depends(get_db), current_user: user.User = Depends(get_current_user)):
+    # Admin-only endpoint — only accessible to therapist role for now
+    if current_user.role not in ("therapist", "admin"):
+        raise HTTPException(status_code=403, detail="Access denied")
     users = db.query(user.User).offset(skip).limit(limit).all()
     safe = []
     for u in users:
@@ -294,7 +297,10 @@ def get_all_users(skip: int = Query(0, ge=0), limit: int = Query(100, ge=1, le=1
     return {"users_in_database": safe}
 
 @app.get("/sessions")
-def get_all_sessions(skip: int = Query(0, ge=0), limit: int = Query(100, ge=1, le=1000), db: Session = Depends(get_db)):
+def get_all_sessions(skip: int = Query(0, ge=0), limit: int = Query(100, ge=1, le=1000), db: Session = Depends(get_db), current_user: user.User = Depends(get_current_user)):
+    # Admin-only endpoint
+    if current_user.role not in ("therapist", "admin"):
+        raise HTTPException(status_code=403, detail="Access denied")
     sessions = db.query(session_model.TherapySession).offset(skip).limit(limit).all()
     safe = []
     for s in sessions:

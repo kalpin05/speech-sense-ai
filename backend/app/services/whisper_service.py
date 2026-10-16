@@ -35,7 +35,8 @@ def transcribe_audio(file_path: str, language_code: str):
     result = model.transcribe(
         file_path,
         language=language_code,   # 🔥 FORCE LANGUAGE
-        task="transcribe"
+        task="transcribe",
+        fp16=False                # CPU-safe: disable half-precision float
     )
 
     return result.get("text", "").strip()
@@ -47,6 +48,7 @@ def transcribe_audio_detailed(file_path: str, language_code: str) -> dict:
         file_path,
         language=language_code,
         task="transcribe",
-        word_timestamps=True
+        word_timestamps=True,
+        fp16=False                # CPU-safe: disable half-precision float
     )
     return result
